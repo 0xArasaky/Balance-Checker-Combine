@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Balance Checker Combine</title>
+    <link rel="stylesheet" href="css/style.css?v=9">
+</head>
+<body>
+    <div class="container">
+        <header class="main-header">
+            <div class="header-decoration left">
+                <div class="decoration-line vertical"></div>
+                <div class="decoration-line horizontal"></div>
+                <div class="decoration-line vertical bottom"></div>
+                <div class="decoration-line horizontal bottom"></div>
+            </div>
+
+            <h1 class="title scramble-text" data-text="Balance Checker Combine">Balance Checker<br>Combine</h1>
+
+            <div class="header-decoration right">
+                <div class="decoration-line vertical"></div>
+                <div class="decoration-line horizontal"></div>
+                <div class="decoration-line vertical bottom"></div>
+                <div class="decoration-line horizontal bottom"></div>
+            </div>
+
+            <span class="version scramble-text" data-text="1.0.0">1.0.0</span>
+        </header>
+
+        <div class="data-selector-wrapper">
+            <button class="data-selector-btn" id="dataSelectorBtn">
+                <span class="data-selector-date" id="currentDate">Loading...</span>
+                <div class="data-selector-right">
+                    <span class="data-selector-balance" id="currentBalance">$0</span>
+                    <svg class="data-selector-arrow" width="15" height="8" viewBox="0 0 15 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="1.6" height="1.6" fill="#808080"/>
+                        <rect x="1.60004" y="1.60001" width="1.6" height="1.6" fill="#808080"/>
+                        <rect x="3.20001" y="3.20001" width="1.6" height="1.6" fill="#808080"/>
+                        <rect x="4.79999" y="4.79999" width="1.6" height="1.6" fill="#808080"/>
+                        <rect x="6.40002" y="6.39999" width="1.6" height="1.6" fill="#808080"/>
+                        <rect x="8" y="4.79999" width="1.6" height="1.6" fill="#808080"/>
+                        <rect x="9.60004" y="3.20001" width="1.6" height="1.6" fill="#808080"/>
+                        <rect x="11.2" y="1.60001" width="1.6" height="1.6" fill="#808080"/>
+                        <rect x="12.8" width="1.6" height="1.6" fill="#808080"/>
+                    </svg>
+                </div>
+            </button>
+
+            <div class="data-selector-dropdown" id="dataDropdown">
+                <div class="dropdown-list" id="dropdownList">
+                </div>
+            </div>
+        </div>
+
+        <section class="total-stats">
+            <div class="categories-section">
+                <h2 class="section-title">Categories</h2>
+                <div class="categories-list" id="categoriesList">
+                </div>
+            </div>
+
+            <div class="tokens-section">
+                <h2 class="section-title">Tokens</h2>
+                <div class="tokens-list" id="tokensList">
+                </div>
+            </div>
+
+            <div class="wallet-groups-section" id="walletGroupsSection">
+            </div>
+        </section>
+
+        <footer class="main-footer">
+            <div class="footer-decoration left">
+                <div class="decoration-line vertical"></div>
+                <div class="decoration-line horizontal"></div>
+                <div class="decoration-line vertical bottom"></div>
+                <div class="decoration-line horizontal bottom"></div>
+            </div>
+
+            <span class="author-text scramble-text" data-text="by Arasaky.eth">by Arasaky.eth</span>
+
+            <div class="social-links">
+                <a href="https://x.com/0xArasaky" target="_blank" rel="noopener noreferrer" class="social-link">
+                    <img src="assets/x.png" alt="X (Twitter)">
+                </a>
+                <a href="https://github.com/0xArasaky" target="_blank" rel="noopener noreferrer" class="social-link">
+                    <img src="assets/github.png" alt="GitHub">
+                </a>
+                <a href="https://t.me/Arasaky0x" target="_blank" rel="noopener noreferrer" class="social-link">
+                    <img src="assets/telegram.png" alt="Telegram">
+                </a>
+            </div>
+
+            <div class="footer-decoration right">
+                <div class="decoration-line vertical"></div>
+                <div class="decoration-line horizontal"></div>
+                <div class="decoration-line vertical bottom"></div>
+                <div class="decoration-line horizontal bottom"></div>
+            </div>
+        </footer>
+    </div>
+
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="loading-text">Loading<span class="loading-cursor"></span></div>
+        </div>
+    </div>
+
+    <script src="js/main.js?v=6"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "name": "balance-checker-combine",
+  "version": "1.0.0",
+  "dependencies": {
+    "@rabby-wallet/rabby-sign": "^0.4.1"
+  }
+}
