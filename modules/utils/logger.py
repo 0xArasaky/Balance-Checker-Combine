@@ -1,7 +1,13 @@
+"""
+Модуль логирования для Balance Checker
+Использует loguru для красивого и информативного вывода
+"""
+
 import sys
 from pathlib import Path
 from loguru import logger
 
+# Настройки логирования
 LOG_LEVEL = "INFO"
 LOG_TO_FILE = True
 LOG_FILE_FORMAT = "app_{time:YYYY-MM-DD}.log"
@@ -10,17 +16,21 @@ LOG_RETENTION = "7 days"
 LOG_COMPRESSION = "zip"
 LOG_MODULE_NAME_WIDTH = 38
 
+# Флаг чтобы избежать повторной настройки
 _logging_setup_done = False
 
 
 def setup_logging():
+    """Настройка системы логирования"""
     global _logging_setup_done
 
     if _logging_setup_done:
         return
 
+    # Удаляем стандартный обработчик
     logger.remove()
 
+    # Консольный вывод с цветами
     logger.add(
         sys.stdout,
         level=LOG_LEVEL,
@@ -28,6 +38,7 @@ def setup_logging():
         colorize=True
     )
 
+    # Файловый вывод
     if LOG_TO_FILE:
         log_dir = Path("logs")
         log_dir.mkdir(exist_ok=True)
@@ -45,21 +56,38 @@ def setup_logging():
     _logging_setup_done = True
 
 
+# Функция экранирования угловых скобок для loguru
+def _escape_tags(message: str) -> str:
+    """Экранирует угловые скобки чтобы loguru не интерпретировал их как цветовые теги"""
+    return message.replace("<", r"\<").replace(">", r"\>")
+
+
+# Специализированные функции логирования
 def error_log(message: str) -> None:
-    logger.opt(colors=True, depth=1).error(f"<red>{message}</red>")
+    """Логирование ошибок с красным цветом"""
+    escaped = _escape_tags(message)
+    logger.opt(colors=True, depth=1).error(f"<red>{escaped}</red>")
 
 
 def warning_log(message: str) -> None:
-    logger.opt(colors=True, depth=1).warning(f"<yellow>{message}</yellow>")
+    """Логирование предупреждений с желтым цветом"""
+    escaped = _escape_tags(message)
+    logger.opt(colors=True, depth=1).warning(f"<yellow>{escaped}</yellow>")
 
 
 def success_log(message: str) -> None:
-    logger.opt(colors=True, depth=1).success(f"<green>{message}</green>")
+    """Логирование успешных операций с зеленым цветом"""
+    escaped = _escape_tags(message)
+    logger.opt(colors=True, depth=1).success(f"<green>{escaped}</green>")
 
 
 def info_log(message: str) -> None:
-    logger.opt(depth=1).info(message)
+    """Информационное логирование"""
+    escaped = _escape_tags(message)
+    logger.opt(depth=1).info(escaped)
 
 
 def debug_log(message: str) -> None:
-    logger.opt(depth=1).debug(message)
+    """Отладочное логирование"""
+    escaped = _escape_tags(message)
+    logger.opt(depth=1).debug(escaped)

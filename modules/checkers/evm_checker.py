@@ -34,7 +34,8 @@ def generate_signature(method: str, url: str, params: dict) -> Optional[Dict[str
             ["node", str(SIGN_SCRIPT), method, url, params_json, nonce],
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=5,
+            cwd=str(SCRIPT_DIR)  # Указываем рабочую директорию для поиска node_modules
         )
 
         if result.returncode != 0:
