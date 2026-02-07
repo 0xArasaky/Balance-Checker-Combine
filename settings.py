@@ -1,45 +1,45 @@
-# Использовать ли прокси для запросов
+# Whether to use proxies for requests
 USE_PROXY = True
 
-# Максимальное количество параллельных потоков при использовании прокси
-# 0 или None = использовать все доступные прокси
-# > 0 = ограничить количество параллельных запросов указанным числом
+# Maximum number of parallel threads when using proxies
+# 0 or None = use all available proxies
+# > 0 = limit parallel requests to the specified number
 PROXY_MAX_WORKERS = 5
 
-# Задержка между запросами (секунды), используется когда прокси НЕ активированы
+# Delay between requests (seconds), used when proxies are NOT enabled
 REQUEST_DELAY = 3
 
-# Задержка между запросами при использовании прокси (секунды)
+# Delay between requests when using proxies (seconds)
 PROXY_REQUEST_DELAY = 10
 
-# Задержка при ошибке запроса с прокси (секунды)
+# Delay on proxy request failure (seconds)
 PROXY_RETRY_DELAY = 10
 
-# Таймаут для HTTP запросов (секунды)
+# HTTP request timeout (seconds)
 REQUEST_TIMEOUT = 30
 
-# Список листов которые нужно обработать
-# Возможные значения: "EVM", "SOL", "BTC", "APT", "OKX", "BINANCE", "BYBIT", "BACKPACK", "KUCOIN", "MEXC", "GATE"
+# Sheets to process
+# Possible values: "EVM", "SOL", "BTC", "APT", "OKX", "BINANCE", "BYBIT", "BACKPACK", "KUCOIN", "MEXC", "GATE"
 ENABLED_SHEETS = ["EVM", "SOL", "BTC", "APT", "OKX", "BINANCE", "BYBIT", "BACKPACK", "KUCOIN", "MEXC", "GATE"]
 
-# Минимальная стоимость токена в USD для отдельного учета в статистике
-# Применяется к EVM, SOL и APT кошелькам
-# Токены дешевле этого значения будут суммироваться в категорию "Other"
+# Minimum token value in USD to track separately in statistics
+# Applies to EVM, SOL and APT wallets
+# Tokens below this value will be summed into the "Other" category
 MIN_TOKEN_VALUE_TO_TRACK = 1
 
-# Минимальная стоимость токена в USD для отдельного учета в статистике на биржах
-# Применяется ко всем централизованным биржам (Binance, OKX, и другие)
-# Токены дешевле этого значения будут суммироваться в категорию "Other"
+# Minimum token value in USD to track separately in exchange statistics
+# Applies to all centralized exchanges (Binance, OKX, etc.)
+# Tokens below this value will be summed into the "Other" category
 MIN_EXCHANGE_TOKEN_VALUE_TO_TRACK = 0.01
 
-# Выбор прокси: случайный (True) или по очереди (False)
+# Proxy selection: random (True) or sequential (False)
 RANDOM_PROXY_SELECTION = True
 
-# Файл с прокси
+# Proxy file
 PROXY_FILE = "proxies.txt"
 
-# Файл с данными кошельков
+# Wallet data file
 DATA_FILE = "data.xlsx"
 
-# Папка для сохранения результатов
+# Output directory for results
 OUTPUT_DIR = "analyses"
