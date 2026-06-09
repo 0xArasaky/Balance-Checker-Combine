@@ -9,10 +9,10 @@ import hashlib
 import time as time_module
 from typing import Optional, Dict
 from modules.utils.logger import error_log, info_log, debug_log, success_log
+from modules.utils.httpx_compat import create_httpx_client
 
 # Backpack API настройки
 BACKPACK_API_URL = "https://backpack-api.xnfts.dev/v3/graphql"
-
 
 def generate_backpack_signature(operation_name: str, query: str, timestamp: str) -> str:
     """
@@ -23,7 +23,6 @@ def generate_backpack_signature(operation_name: str, query: str, timestamp: str)
     # Формируем массив как в оригинальном коде расширения
     sign_data = json.dumps([signature_version, operation_name, query, timestamp], separators=(',', ':'))
     return hashlib.sha256(sign_data.encode('utf-8')).hexdigest()
-
 
 def get_backpack_headers(operation_name: str, query: str) -> dict:
     """Генерирует заголовки с подписью для Backpack API"""
@@ -49,10 +48,15 @@ def get_backpack_headers(operation_name: str, query: str) -> dict:
         "x-backpack-ignore-response-cache": "false",
         "x-backpack-signature": signature,
         "x-backpack-signature-version": "1",
-        "x-backpack-timestamp": timestamp,
+        "x-backpack-timestamp": str(timestamp),
         "x-blockchain-caip2": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
     }
 
+# Старые заголовки для обратной совместимости (не используются)
+BACKPACK_HEADERS = {
+    "accept": "*/*",
+    "content-type": "application/json",
+}
 
 # GraphQL запрос для токенов
 TOKENS_QUERY = """
@@ -194,17 +198,18 @@ def get_sol_balance(
             # Логируем токены если есть wallet_info
             if wallet_info and tokens_data:
                 tokens_list = [f"{symbol}: ${value:,.2f}" for symbol, value in tokens_data.items() if symbol != "error"]
-                info_log(f"{wallet_info} -> Токены: {', '.join(tokens_list)}")
+                if tokens_list:
+                    info_log(f"{wallet_info} → Токены: {', '.join(tokens_list)}")
 
         # Выводим компактный результат одной строкой
-        if wallet_info and not collect_tokens:
+        if wallet_info and not collect_tokens:  # Если токены уже залогированы выше, не дублируем баланс
             info_log(
-                f"{wallet_info} -> Токены: ${tokens_value:,.2f} | "
+                f"{wallet_info} → Токены: ${tokens_value:,.2f} | "
                 f"DeFi: ${defi_value:,.2f} | Итого: ${total_balance:,.2f}"
             )
-        elif wallet_info and collect_tokens:
+        elif wallet_info and collect_tokens:  # Если собираем токены, логируем баланс + токены вместе
             info_log(
-                f"{wallet_info} -> Токены: ${tokens_value:,.2f} | "
+                f"{wallet_info} → Токены: ${tokens_value:,.2f} | "
                 f"DeFi: ${defi_value:,.2f} | Итого: ${total_balance:,.2f}"
             )
 
@@ -218,7 +223,7 @@ def get_sol_balance(
 
     except httpx.TimeoutException:
         if wallet_info:
-            error_log(f"{wallet_info} -> Ошибка: TIMEOUT")
+            error_log(f"{wallet_info} → Ошибка: TIMEOUT")
         return {
             "tokens_balance": 0.0,
             "defi_balance": 0.0,
@@ -228,7 +233,7 @@ def get_sol_balance(
         }
     except Exception as e:
         if wallet_info:
-            error_log(f"{wallet_info} -> Ошибка: {str(e)[:50]}")
+            error_log(f"{wallet_info} → Ошибка: {str(e)[:50]}")
         return {
             "tokens_balance": 0.0,
             "defi_balance": 0.0,
@@ -275,7 +280,7 @@ def _get_tokens_data(
         body = json.dumps(payload, separators=(',', ':'))
         headers = get_backpack_headers(payload["operationName"], payload["query"])
 
-        with httpx.Client(proxies=proxy_dict, timeout=timeout) as client:
+        with create_httpx_client(proxy_dict, timeout=timeout) as client:
             response = client.post(
                 BACKPACK_API_URL,
                 headers=headers,
@@ -443,7 +448,7 @@ def _get_defi_value(
         body = json.dumps(payload, separators=(',', ':'))
         headers = get_backpack_headers(payload["operationName"], payload["query"])
 
-        with httpx.Client(proxies=proxy_dict, timeout=timeout) as client:
+        with create_httpx_client(proxy_dict, timeout=timeout) as client:
             response = client.post(
                 BACKPACK_API_URL,
                 headers=headers,
@@ -520,7 +525,7 @@ def get_sol_tokens(
         body = json.dumps(payload, separators=(',', ':'))
         headers = get_backpack_headers(payload["operationName"], payload["query"])
 
-        with httpx.Client(proxies=proxy_dict, timeout=timeout) as client:
+        with create_httpx_client(proxy_dict, timeout=timeout) as client:
             response = client.post(
                 BACKPACK_API_URL,
                 headers=headers,

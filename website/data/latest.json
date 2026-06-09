@@ -1,0 +1,575 @@
+{
+  "metadata": {
+    "timestamp": "2000-01-01T00:00:00",
+    "timestamp_readable": "2000-01-01 00:00:00",
+    "total_balance": 106750
+  },
+  "total_stats": {
+    "categories": {
+      "EVM": {
+        "total": 28750,
+        "chains": 19000,
+        "defi_other": 4400,
+        "polymarket_positions": 1150,
+        "polymarket_total": 2700,
+        "hyperliquid": 3350,
+        "lighter": 850
+      },
+      "SOL": {
+        "total": 12800,
+        "tokens": 9963.23,
+        "defi": 2836.77
+      },
+      "BTC": {
+        "total": 23500,
+        "btc": 19173.67,
+        "runes": 1639.63,
+        "inscriptions": 2686.71
+      },
+      "APT": {
+        "total": 5700,
+        "apt": 1763.73,
+        "other_tokens": 754.19,
+        "staked_apt": 3182.08
+      },
+      "OKX": {
+        "total": 5000
+      },
+      "BINANCE": {
+        "total": 8500
+      },
+      "BYBIT": {
+        "total": 4200
+      },
+      "BACKPACK": {
+        "total": 3800
+      },
+      "KUCOIN": {
+        "total": 6200
+      },
+      "MEXC": {
+        "total": 3500
+      },
+      "GATE": {
+        "total": 4800
+      }
+    },
+    "tokens": {
+      "ETH": 13348.14,
+      "USDT": 12540.72,
+      "BTC": 6626.0,
+      "USDC": 6153.91,
+      "SOL": 5412.14,
+      "WETH": 2844.24,
+      "JUP": 672.02,
+      "AAVE": 534.17,
+      "Other": 403.74,
+      "LINK": 365.86,
+      "WIF": 284.36,
+      "UNI": 242.67,
+      "PYTH": 55.18
+    }
+  },
+  "categories": {
+    "EVM": {
+      "items": [
+        {
+          "name": "Wallet 1",
+          "group": "Main",
+          "address": "0xfcd32da9dc0dfaba772d190170f56196cfe4e6e7",
+          "balances": {
+            "chains": 3500,
+            "defi_other": 800,
+            "polymarket_positions": 200,
+            "polymarket_total": 500,
+            "hyperliquid": 600,
+            "lighter": 150,
+            "total": 5250
+          },
+          "tokens": {
+            "ETH": 2078.78,
+            "USDC": 865.68,
+            "WETH": 519.28,
+            "AAVE": 268.35,
+            "UNI": 133.79,
+            "Other": 23.29
+          }
+        },
+        {
+          "name": "Wallet 2",
+          "group": "Main",
+          "address": "0x1d7148315d7aefbb0c64da32a4f6a20af9218a53",
+          "balances": {
+            "chains": 2800,
+            "defi_other": 600,
+            "polymarket_positions": 150,
+            "polymarket_total": 400,
+            "hyperliquid": 450,
+            "lighter": 100,
+            "total": 4100
+          },
+          "tokens": {
+            "ETH": 1174.65,
+            "USDC": 668.72,
+            "WETH": 556.9,
+            "USDT": 209.71,
+            "UNI": 56.71,
+            "Other": 15.1
+          }
+        },
+        {
+          "name": "Trading Wallet",
+          "group": "Trading",
+          "address": "0x5755700980025286be75510780996ed2b2216ebc",
+          "balances": {
+            "chains": 4200,
+            "defi_other": 1000,
+            "polymarket_positions": 300,
+            "polymarket_total": 600,
+            "hyperliquid": 800,
+            "lighter": 200,
+            "total": 6500
+          },
+          "tokens": {
+            "ETH": 1719.76,
+            "USDC": 850.27,
+            "WETH": 484.66,
+            "LINK": 241.25,
+            "UNI": 52.17,
+            "Other": 24.76
+          }
+        },
+        {
+          "name": "Cold Wallet",
+          "group": "Cold",
+          "address": "0x8cbc552c79ef333a0c868c06001a72c9d2432c90",
+          "balances": {
+            "chains": 8500,
+            "defi_other": 2000,
+            "polymarket_positions": 500,
+            "polymarket_total": 1200,
+            "hyperliquid": 1500,
+            "lighter": 400,
+            "total": 12900
+          },
+          "tokens": {
+            "ETH": 3636.43,
+            "USDC": 1765.43,
+            "WETH": 1283.4,
+            "AAVE": 265.82,
+            "LINK": 124.61,
+            "Other": 46.02
+          }
+        }
+      ],
+      "stats": {
+        "total": 28750,
+        "chains": 19000,
+        "defi_other": 4400,
+        "polymarket_positions": 1150,
+        "polymarket_total": 2700,
+        "hyperliquid": 3350,
+        "lighter": 850
+      }
+    },
+    "SOL": {
+      "items": [
+        {
+          "name": "Phantom",
+          "group": "Main",
+          "address": "LSCdLRzgmtwEZhfmYTh4o6j5yYMh3zYKkrfkRM5oihuP",
+          "balances": {
+            "tokens": 2476.65,
+            "defi": 1023.35,
+            "total": 3500
+          },
+          "tokens": {
+            "SOL": 1356.49,
+            "USDC": 428.11,
+            "JUP": 144.1,
+            "WIF": 138.93,
+            "Other": 7.21
+          }
+        },
+        {
+          "name": "Solflare",
+          "group": "Main",
+          "address": "FX6mufTCSwV2Q1TbdVoUM9iCAkqoi1WQLQ5TBFZGr2Pi",
+          "balances": {
+            "tokens": 2243.13,
+            "defi": 556.87,
+            "total": 2800
+          },
+          "tokens": {
+            "SOL": 1377.33,
+            "USDC": 555.66,
+            "JUP": 209.92,
+            "PYTH": 55.18,
+            "Other": 26.81
+          }
+        },
+        {
+          "name": "Cold SOL",
+          "group": "Cold",
+          "address": "sqKHtnoKg73HkinF4dXpYT6B5P2S5cTrSL7kjfdJBqUW",
+          "balances": {
+            "tokens": 5243.45,
+            "defi": 1256.55,
+            "total": 6500
+          },
+          "tokens": {
+            "SOL": 2678.32,
+            "USDC": 1020.04,
+            "JUP": 318.0,
+            "WIF": 145.43,
+            "Other": 19.06
+          }
+        }
+      ],
+      "stats": {
+        "total": 12800,
+        "tokens": 9963.23,
+        "defi": 2836.77
+      }
+    },
+    "BTC": {
+      "items": [
+        {
+          "name": "Ledger",
+          "group": "Cold",
+          "address": "bc1pmq0t0vfazzud4w6u0eafm27r2mayul3ruwts6cld4fuszjaq7w4py3pd7p",
+          "balances": {
+            "btc": 13075.4,
+            "runes": 768.46,
+            "inscriptions": 1156.15,
+            "total": 15000
+          }
+        },
+        {
+          "name": "Trezor",
+          "group": "Cold",
+          "address": "bc1pfhp7l4ag5jg8f30t4g85av7t44zkyaqfsj3d7tt8gwg75gaadlwl7gj7nz",
+          "balances": {
+            "btc": 6098.27,
+            "runes": 871.17,
+            "inscriptions": 1530.56,
+            "total": 8500
+          }
+        }
+      ],
+      "stats": {
+        "total": 23500,
+        "btc": 19173.67,
+        "runes": 1639.63,
+        "inscriptions": 2686.71
+      }
+    },
+    "APT": {
+      "items": [
+        {
+          "name": "Petra",
+          "group": "Main",
+          "address": "0xc4f1ed73a9d8bf1151dd22619ca4ed74c4b3fbd29f6dccc3029cd302715af5cc",
+          "balances": {
+            "apt": 625.78,
+            "other_tokens": 476.5,
+            "staked_apt": 1397.72,
+            "total": 2500
+          },
+          "tokens": {
+            "APT": 625.78,
+            "Staked APT": 1397.72,
+            "tAPT": 99.14,
+            "Other": 476.5
+          }
+        },
+        {
+          "name": "Martian",
+          "group": "Main",
+          "address": "0xedd26cb41681e67e68120aa72e8c19c36cb345a17569f6bf0212ad9a92d64032",
+          "balances": {
+            "apt": 1137.95,
+            "other_tokens": 277.69,
+            "staked_apt": 1784.36,
+            "total": 3200
+          },
+          "tokens": {
+            "APT": 1137.95,
+            "Staked APT": 1784.36,
+            "tAPT": 94.35,
+            "Other": 277.69
+          }
+        }
+      ],
+      "stats": {
+        "total": 5700,
+        "apt": 1763.73,
+        "other_tokens": 754.19,
+        "staked_apt": 3182.08
+      }
+    },
+    "OKX": {
+      "items": [
+        {
+          "name": "OKX Main",
+          "group": "Main",
+          "api_key_last4": "5jDx",
+          "balances": {
+            "total": 5000
+          },
+          "tokens": {
+            "USDT (Futures USDT)": 1736.57,
+            "BTC (Futures USDT)": 754.09,
+            "ETH (Spot)": 510.2,
+            "Other": 44.0
+          }
+        }
+      ],
+      "stats": {
+        "total": 5000
+      }
+    },
+    "BINANCE": {
+      "items": [
+        {
+          "name": "Binance",
+          "group": "Main",
+          "api_key_last4": "IVqz",
+          "balances": {
+            "total": 8500
+          },
+          "tokens": {
+            "USDT (Spot)": 2820.18,
+            "BTC (Spot)": 1648.32,
+            "ETH (Spot)": 886.05,
+            "Other": 35.94
+          }
+        }
+      ],
+      "stats": {
+        "total": 8500
+      }
+    },
+    "BYBIT": {
+      "items": [
+        {
+          "name": "Bybit",
+          "group": "Main",
+          "api_key_last4": "aWx0",
+          "balances": {
+            "total": 4200
+          },
+          "tokens": {
+            "USDT (Spot)": 1368.32,
+            "BTC (Trading)": 904.48,
+            "ETH (Spot)": 463.47,
+            "Other": 42.18
+          }
+        }
+      ],
+      "stats": {
+        "total": 4200
+      }
+    },
+    "BACKPACK": {
+      "items": [
+        {
+          "name": "Backpack",
+          "group": "Main",
+          "api_key_last4": "Sonv",
+          "balances": {
+            "total": 3800
+          },
+          "tokens": {
+            "USDT": 2440.59,
+            "ETH": 544.02,
+            "BTC": 482.63,
+            "Other": 19.41
+          }
+        }
+      ],
+      "stats": {
+        "total": 3800
+      }
+    },
+    "KUCOIN": {
+      "items": [
+        {
+          "name": "KuCoin",
+          "group": "Main",
+          "api_key_last4": "uxNb",
+          "balances": {
+            "total": 6200
+          },
+          "tokens": {
+            "USDT (Spot)": 1629.67,
+            "ETH (Spot)": 985.16,
+            "BTC (Spot)": 939.12,
+            "Other": 18.83
+          }
+        }
+      ],
+      "stats": {
+        "total": 6200
+      }
+    },
+    "MEXC": {
+      "items": [
+        {
+          "name": "MEXC",
+          "group": "Main",
+          "api_key_last4": "taM7",
+          "balances": {
+            "total": 3500
+          },
+          "tokens": {
+            "USDT (Spot)": 1120.07,
+            "BTC (Trading)": 692.23,
+            "ETH (Trading)": 523.76,
+            "Other": 35.47
+          }
+        }
+      ],
+      "stats": {
+        "total": 3500
+      }
+    },
+    "GATE": {
+      "items": [
+        {
+          "name": "Gate",
+          "group": "Main",
+          "api_key_last4": "c0GL",
+          "balances": {
+            "total": 4800
+          },
+          "tokens": {
+            "USDT (Spot)": 1215.61,
+            "BTC (Spot)": 1205.13,
+            "ETH (Spot)": 825.86,
+            "Other": 45.66
+          }
+        }
+      ],
+      "stats": {
+        "total": 4800
+      }
+    }
+  },
+  "tokens_stats": {
+    "EVM": {
+      "items": [
+        {
+          "name": "Wallet 1",
+          "group": "Main",
+          "address": "0xfcd32da9dc0dfaba772d190170f56196cfe4e6e7",
+          "tokens": {
+            "ETH": 2078.78,
+            "USDC": 865.68,
+            "WETH": 519.28,
+            "AAVE": 268.35,
+            "UNI": 133.79,
+            "Other": 23.29
+          }
+        },
+        {
+          "name": "Wallet 2",
+          "group": "Main",
+          "address": "0x1d7148315d7aefbb0c64da32a4f6a20af9218a53",
+          "tokens": {
+            "ETH": 1174.65,
+            "USDC": 668.72,
+            "WETH": 556.9,
+            "USDT": 209.71,
+            "UNI": 56.71,
+            "Other": 15.1
+          }
+        },
+        {
+          "name": "Trading Wallet",
+          "group": "Trading",
+          "address": "0x5755700980025286be75510780996ed2b2216ebc",
+          "tokens": {
+            "ETH": 1719.76,
+            "USDC": 850.27,
+            "WETH": 484.66,
+            "LINK": 241.25,
+            "UNI": 52.17,
+            "Other": 24.76
+          }
+        },
+        {
+          "name": "Cold Wallet",
+          "group": "Cold",
+          "address": "0x8cbc552c79ef333a0c868c06001a72c9d2432c90",
+          "tokens": {
+            "ETH": 3636.43,
+            "USDC": 1765.43,
+            "WETH": 1283.4,
+            "AAVE": 265.82,
+            "LINK": 124.61,
+            "Other": 46.02
+          }
+        }
+      ],
+      "totals": {
+        "ETH": 8609.62,
+        "USDC": 4150.1,
+        "WETH": 2844.24,
+        "AAVE": 534.17,
+        "LINK": 365.86,
+        "UNI": 242.67,
+        "USDT": 209.71,
+        "Other": 109.17
+      }
+    },
+    "SOL": {
+      "items": [
+        {
+          "name": "Phantom",
+          "group": "Main",
+          "address": "LSCdLRzgmtwEZhfmYTh4o6j5yYMh3zYKkrfkRM5oihuP",
+          "tokens": {
+            "SOL": 1356.49,
+            "USDC": 428.11,
+            "JUP": 144.1,
+            "WIF": 138.93,
+            "Other": 7.21
+          }
+        },
+        {
+          "name": "Solflare",
+          "group": "Main",
+          "address": "FX6mufTCSwV2Q1TbdVoUM9iCAkqoi1WQLQ5TBFZGr2Pi",
+          "tokens": {
+            "SOL": 1377.33,
+            "USDC": 555.66,
+            "JUP": 209.92,
+            "PYTH": 55.18,
+            "Other": 26.81
+          }
+        },
+        {
+          "name": "Cold SOL",
+          "group": "Cold",
+          "address": "sqKHtnoKg73HkinF4dXpYT6B5P2S5cTrSL7kjfdJBqUW",
+          "tokens": {
+            "SOL": 2678.32,
+            "USDC": 1020.04,
+            "JUP": 318.0,
+            "WIF": 145.43,
+            "Other": 19.06
+          }
+        }
+      ],
+      "totals": {
+        "SOL": 5412.14,
+        "USDC": 2003.81,
+        "JUP": 672.02,
+        "WIF": 284.36,
+        "PYTH": 55.18,
+        "Other": 53.08
+      }
+    }
+  }
+}

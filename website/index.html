@@ -3,12 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#010101">
+    <meta name="apple-mobile-web-app-title" content="Balance">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="application-name" content="Balance Checker Combine">
+    <meta name="msapplication-TileColor" content="#010101">
     <title>Balance Checker Combine</title>
-    <link rel="stylesheet" href="css/style.css?v=9">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="assets/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
+    <link rel="stylesheet" href="css/style.css?v=1.2.0">
 </head>
 <body>
     <div class="container">
         <header class="main-header">
+            <!-- Левые декоративные элементы -->
             <div class="header-decoration left">
                 <div class="decoration-line vertical"></div>
                 <div class="decoration-line horizontal"></div>
@@ -16,8 +28,10 @@
                 <div class="decoration-line horizontal bottom"></div>
             </div>
 
+            <!-- Заголовок -->
             <h1 class="title scramble-text" data-text="Balance Checker Combine">Balance Checker<br>Combine</h1>
 
+            <!-- Правые декоративные элементы -->
             <div class="header-decoration right">
                 <div class="decoration-line vertical"></div>
                 <div class="decoration-line horizontal"></div>
@@ -25,9 +39,11 @@
                 <div class="decoration-line horizontal bottom"></div>
             </div>
 
-            <span class="version scramble-text" data-text="1.0.0">1.0.0</span>
+            <!-- Версия -->
+            <span class="version scramble-text" data-text="1.2.0">1.2.0</span>
         </header>
 
+        <!-- Выбор данных по датам -->
         <div class="data-selector-wrapper">
             <button class="data-selector-btn" id="dataSelectorBtn">
                 <span class="data-selector-date" id="currentDate">Loading...</span>
@@ -47,30 +63,41 @@
                 </div>
             </button>
 
+            <!-- Выпадающий список -->
             <div class="data-selector-dropdown" id="dataDropdown">
                 <div class="dropdown-list" id="dropdownList">
+                    <!-- Список будет заполнен через JS -->
                 </div>
             </div>
         </div>
 
+        <!-- Total Stats -->
         <section class="total-stats">
+            <!-- Categories Section -->
             <div class="categories-section">
                 <h2 class="section-title">Categories</h2>
                 <div class="categories-list" id="categoriesList">
+                    <!-- Будет заполнено через JS -->
                 </div>
             </div>
 
+            <!-- Tokens Section -->
             <div class="tokens-section">
                 <h2 class="section-title">Tokens</h2>
                 <div class="tokens-list" id="tokensList">
+                    <!-- Будет заполнено через JS -->
                 </div>
             </div>
 
+            <!-- Wallet Groups Section -->
             <div class="wallet-groups-section" id="walletGroupsSection">
+                <!-- Будет заполнено через JS -->
             </div>
         </section>
 
+        <!-- Footer -->
         <footer class="main-footer">
+            <!-- Левые декоративные элементы -->
             <div class="footer-decoration left">
                 <div class="decoration-line vertical"></div>
                 <div class="decoration-line horizontal"></div>
@@ -78,8 +105,10 @@
                 <div class="decoration-line horizontal bottom"></div>
             </div>
 
+            <!-- Текст автора -->
             <span class="author-text scramble-text" data-text="by Arasaky.eth">by Arasaky.eth</span>
 
+            <!-- Социальные сети -->
             <div class="social-links">
                 <a href="https://x.com/0xArasaky" target="_blank" rel="noopener noreferrer" class="social-link">
                     <img src="assets/x.png" alt="X (Twitter)">
@@ -92,6 +121,7 @@
                 </a>
             </div>
 
+            <!-- Правые декоративные элементы -->
             <div class="footer-decoration right">
                 <div class="decoration-line vertical"></div>
                 <div class="decoration-line horizontal"></div>
@@ -101,12 +131,13 @@
         </footer>
     </div>
 
+    <!-- Loading Overlay -->
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-content">
             <div class="loading-text">Loading<span class="loading-cursor"></span></div>
         </div>
     </div>
 
-    <script src="js/main.js?v=6"></script>
+    <script src="js/main.js?v=1.2.0"></script>
 </body>
 </html>

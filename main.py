@@ -1,3 +1,8 @@
+"""
+Balance Checker Combine - главный скрипт
+Проверяет балансы кошельков EVM и Solana из data.xlsx
+"""
+
 import time
 from pathlib import Path
 from typing import List, Dict, Optional
@@ -37,12 +42,24 @@ def display_ascii_banner():
 
 
 def _parse_specific_proxy(specific_proxy: Optional[str]) -> Optional[Dict[str, str]]:
+    """
+    Парсит specific_proxy в формат proxy_dict для httpx
+
+    Args:
+        specific_proxy: Строка прокси в формате "host:port:username:password" или "no proxy" или None
+
+    Returns:
+        Dict с прокси в формате httpx, или None
+    """
     if not specific_proxy:
+        # Пусто - вернуть None (будет использоваться текущая механика)
         return None
 
     if specific_proxy.lower() == "no proxy":
-        return "no_proxy"
+        # Явно указано не использовать прокси
+        return "no_proxy"  # Специальный маркер
 
+    # Парсим формат host:port:username:password
     parts = specific_proxy.split(':')
     if len(parts) != 4:
         error_log(f"Неверный формат прокси: {specific_proxy}. Ожидается host:port:username:password")
@@ -64,13 +81,29 @@ def _process_single_wallet(
     checker_func,
     proxy_manager: Optional[ProxyManager] = None
 ) -> Dict[str, any]:
+    """
+    Обработать один кошелек (для параллельной обработки)
+
+    Args:
+        wallet: Данные кошелька
+        idx: Индекс кошелька
+        total: Общее количество кошельков
+        checker_func: Функция для проверки баланса
+        proxy_manager: Менеджер прокси или None
+
+    Returns:
+        Словарь с балансом
+    """
     address = wallet['address']
     name = wallet['name']
 
+    # Формируем информацию о кошельке для вывода
     wallet_info_str = f"[{idx}/{total}] {name} ({address[:8]}...{address[-6:]})"
 
+    # Определяем параметры запроса
     proxy_dict = None
 
+    # Пытаемся получить баланс с БЕСКОНЕЧНЫМИ повторными попытками
     balance = None
     attempt = 0
 
@@ -84,6 +117,7 @@ def _process_single_wallet(
                 time.sleep(5)
                 continue
 
+        # Выполняем запрос (для EVM, SOL и APT собираем токены сразу)
         if checker_func in [get_evm_balance, get_sol_balance, get_apt_balance]:
             balance = checker_func(
                 address=address,
@@ -101,12 +135,18 @@ def _process_single_wallet(
                 wallet_info=wallet_info_str
             )
 
+        # Проверяем результат
         if balance.get('error') is None:
+            # Успешно получили баланс
+            # Задержка после успешного запроса с прокси (если настроена)
             if settings.USE_PROXY and proxy_manager and settings.PROXY_REQUEST_DELAY > 0:
                 time.sleep(settings.PROXY_REQUEST_DELAY)
             break
         else:
+            # Ошибка - пробуем другой прокси если доступны
             if settings.USE_PROXY and proxy_manager and proxy_dict:
+                # НЕ помечаем прокси как failed - пусть используется для других кошельков
+                # Даже если прокси мертвый, он будет fail на повторных попытках и retry сработает
                 warning_log(f"{wallet_info_str} → Попытка {attempt} провалилась (ошибка: {balance.get('error')}), пробуем другой прокси...")
                 time.sleep(settings.PROXY_RETRY_DELAY)
             else:
@@ -120,18 +160,30 @@ def _process_wallets_sequential(
     wallets: List[Dict[str, str]],
     checker_func
 ) -> List[Dict[str, any]]:
+    """
+    Последовательная обработка кошельков с адаптивной задержкой
+
+    Args:
+        wallets: Список словарей с данными кошельков
+        checker_func: Функция для проверки баланса
+
+    Returns:
+        Список словарей с балансами в том же порядке
+    """
     balances = []
     total_wallets = len(wallets)
 
+    # Определяем задержку в зависимости от количества кошельков
     if total_wallets < 10:
         delay = 0.5
-    else:
+    else:  # 10-100
         delay = 0.2
 
     for idx, wallet in enumerate(wallets, 1):
         balance = _process_single_wallet(wallet, idx, len(wallets), checker_func, None)
         balances.append(balance)
 
+        # Задержка между запросами
         if idx < len(wallets):
             time.sleep(delay)
 
@@ -143,16 +195,32 @@ def _process_wallets_parallel(
     checker_func,
     proxy_manager: ProxyManager
 ) -> List[Dict[str, any]]:
+    """
+    Параллельная обработка кошельков с использованием прокси
+
+    Args:
+        wallets: Список словарей с данными кошельков
+        checker_func: Функция для проверки баланса
+        proxy_manager: Менеджер прокси
+
+    Returns:
+        Список словарей с балансами в том же порядке
+    """
+    # Определяем количество параллельных потоков
     if settings.PROXY_MAX_WORKERS and settings.PROXY_MAX_WORKERS > 0:
+        # Используем настройку из конфига (но не больше чем доступных прокси)
         max_workers = min(settings.PROXY_MAX_WORKERS, proxy_manager.get_available_proxy_count())
     else:
+        # Автоматически = количеству доступных прокси
         max_workers = proxy_manager.get_available_proxy_count()
 
     info_log(f"Параллельная обработка: {max_workers} потоков")
 
+    # Словарь для хранения результатов с сохранением порядка
     results = {}
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Запускаем задачи
         future_to_idx = {
             executor.submit(
                 _process_single_wallet,
@@ -165,6 +233,7 @@ def _process_wallets_parallel(
             for idx, wallet in enumerate(wallets, 1)
         }
 
+        # Собираем результаты по мере выполнения
         for future in as_completed(future_to_idx):
             idx = future_to_idx[future]
             try:
@@ -174,6 +243,7 @@ def _process_wallets_parallel(
                 error_log(f"Ошибка обработки кошелька {idx}: {str(e)}")
                 results[idx] = {"error": "ERROR"}
 
+    # Возвращаем результаты в правильном порядке
     balances = [results[idx] for idx in sorted(results.keys())]
 
     return balances
@@ -183,12 +253,25 @@ def _process_wallets_parallel_no_proxy(
     wallets: List[Dict[str, str]],
     checker_func
 ) -> List[Dict[str, any]]:
+    """
+    Параллельная обработка кошельков без прокси (для > 100 кошельков)
+
+    Args:
+        wallets: Список словарей с данными кошельков
+        checker_func: Функция для проверки баланса
+
+    Returns:
+        Список словарей с балансами в том же порядке
+    """
+    # Ограничиваем количество потоков до 10 чтобы не нагружать API
     max_workers = 10
     info_log(f"Параллельная обработка без прокси: {max_workers} потоков")
 
+    # Словарь для хранения результатов с сохранением порядка
     results = {}
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Запускаем задачи
         future_to_idx = {
             executor.submit(
                 _process_single_wallet,
@@ -201,6 +284,7 @@ def _process_wallets_parallel_no_proxy(
             for idx, wallet in enumerate(wallets, 1)
         }
 
+        # Собираем результаты по мере выполнения
         for future in as_completed(future_to_idx):
             idx = future_to_idx[future]
             try:
@@ -210,6 +294,7 @@ def _process_wallets_parallel_no_proxy(
                 error_log(f"Ошибка обработки кошелька {idx}: {str(e)}")
                 results[idx] = {"error": "ERROR"}
 
+    # Возвращаем результаты в правильном порядке
     balances = [results[idx] for idx in sorted(results.keys())]
 
     return balances
@@ -220,13 +305,28 @@ def process_wallets(
     checker_func,
     proxy_manager: Optional[ProxyManager] = None
 ) -> List[Dict[str, any]]:
+    """
+    Обработать список кошельков через чекер
+
+    Args:
+        wallets: Список словарей с данными кошельков
+        checker_func: Функция для проверки баланса
+        proxy_manager: Менеджер прокси или None
+
+    Returns:
+        Список словарей с балансами в том же порядке
+    """
+    # Если используем прокси - ВСЕГДА параллельная обработка (независимо от количества)
     if settings.USE_PROXY and proxy_manager:
         return _process_wallets_parallel(wallets, checker_func, proxy_manager)
 
+    # Без прокси - выбираем стратегию по количеству кошельков
     total_wallets = len(wallets)
     if total_wallets > 100:
+        # Больше 100 - параллельная обработка без прокси
         return _process_wallets_parallel_no_proxy(wallets, checker_func)
     else:
+        # Меньше 100 - последовательная обработка с задержками
         return _process_wallets_sequential(wallets, checker_func)
 
 
@@ -235,10 +335,22 @@ def process_exchange_accounts(
     excel_handler: ExcelHandler,
     checker_func
 ) -> Optional[Dict]:
+    """
+    Обработать биржевые аккаунты (OKX, Binance, Bybit) - специальная обработка для API ключей
+
+    Args:
+        sheet_name: Имя листа (OKX, BINANCE, BYBIT)
+        excel_handler: Обработчик Excel
+        checker_func: Функция чекера для конкретной биржи
+
+    Returns:
+        Словарь с данными {"wallets": [...], "balances": [...], "stats": {...}} или None при ошибке
+    """
     info_log("=" * 80)
     info_log(f"Обработка листа: {sheet_name}")
     info_log("=" * 80)
 
+    # Читаем аккаунты
     if sheet_name == "OKX":
         accounts = excel_handler.read_okx_accounts()
     elif sheet_name == "BINANCE":
@@ -261,38 +373,50 @@ def process_exchange_accounts(
         warning_log(f"Лист {sheet_name} пустой или не найден, пропускаем")
         return None
 
+    # Определяем стратегию обработки в зависимости от количества
     balances = []
     total = len(accounts)
 
+    # Определяем задержку в зависимости от количества аккаунтов
     if total < 10:
         delay = 0.5
     elif total <= 100:
         delay = 0.2
     else:
-        delay = 0
+        delay = 0  # Для > 100 можно использовать параллельную обработку или без задержки
 
     for idx, account in enumerate(accounts, 1):
         name = account['name']
 
+        # Формируем информацию для вывода
         wallet_info_str = f"[{idx}/{total}] {name}"
 
+        # Обрабатываем specific_proxy
         specific_proxy_str = account.get('specific_proxy')
         specific_proxy_dict = _parse_specific_proxy(specific_proxy_str)
 
+        # Пытаемся получить баланс с ограниченным количеством попыток
         balance = None
         attempt = 0
+        max_retries = settings.MAX_EXCHANGE_RETRIES
 
-        while True:
+        while attempt < max_retries:
             attempt += 1
 
+            # Определяем proxy_dict для текущего запроса
             proxy_dict = None
 
             if specific_proxy_dict == "no_proxy":
+                # Явно указано не использовать прокси
                 proxy_dict = None
             elif specific_proxy_dict:
+                # Указан конкретный прокси - используем его
                 proxy_dict = specific_proxy_dict
+            # Если specific_proxy_dict = None, значит поле было пустым - оставляем proxy_dict = None (текущая механика)
 
+            # Получаем баланс в зависимости от биржи
             if sheet_name == "OKX":
+                # Для OKX собираем токены
                 balance = checker_func(
                     api_key=account['api_key'],
                     secret_key=account['secret_key'],
@@ -304,6 +428,7 @@ def process_exchange_accounts(
                     min_token_value=settings.MIN_EXCHANGE_TOKEN_VALUE_TO_TRACK
                 )
             elif sheet_name == "KUCOIN":
+                # Для KuCoin собираем токены
                 balance = checker_func(
                     api_key=account['api_key'],
                     secret_key=account['secret_key'],
@@ -315,6 +440,7 @@ def process_exchange_accounts(
                     min_token_value=settings.MIN_EXCHANGE_TOKEN_VALUE_TO_TRACK
                 )
             elif sheet_name == "BINANCE":
+                # Для Binance собираем токены
                 balance = checker_func(
                     api_key=account['api_key'],
                     secret_key=account['secret_key'],
@@ -325,6 +451,7 @@ def process_exchange_accounts(
                     min_token_value=settings.MIN_EXCHANGE_TOKEN_VALUE_TO_TRACK
                 )
             elif sheet_name == "BYBIT":
+                # Для Bybit собираем токены
                 balance = checker_func(
                     api_key=account['api_key'],
                     secret_key=account['secret_key'],
@@ -335,6 +462,7 @@ def process_exchange_accounts(
                     min_token_value=settings.MIN_EXCHANGE_TOKEN_VALUE_TO_TRACK
                 )
             elif sheet_name == "BACKPACK":
+                # Для Backpack собираем токены
                 balance = checker_func(
                     api_key=account['api_key'],
                     secret_key=account['secret_key'],
@@ -345,6 +473,7 @@ def process_exchange_accounts(
                     min_token_value=settings.MIN_EXCHANGE_TOKEN_VALUE_TO_TRACK
                 )
             elif sheet_name == "MEXC":
+                # Для MEXC собираем токены
                 balance = checker_func(
                     api_key=account['api_key'],
                     secret_key=account['secret_key'],
@@ -355,6 +484,7 @@ def process_exchange_accounts(
                     min_token_value=settings.MIN_EXCHANGE_TOKEN_VALUE_TO_TRACK
                 )
             elif sheet_name == "GATE":
+                # Для Gate.io собираем токены
                 balance = checker_func(
                     api_key=account['api_key'],
                     secret_key=account['secret_key'],
@@ -365,24 +495,34 @@ def process_exchange_accounts(
                     min_token_value=settings.MIN_EXCHANGE_TOKEN_VALUE_TO_TRACK
                 )
 
+            # Проверяем результат
             if balance.get('error') is None:
+                # Успешно получили баланс
                 break
             else:
-                warning_log(f"{wallet_info_str} → Попытка {attempt} провалилась (ошибка: {balance.get('error')}), повторяем...")
-                time.sleep(settings.PROXY_RETRY_DELAY)
+                if attempt < max_retries:
+                    warning_log(f"{wallet_info_str} → Попытка {attempt}/{max_retries} провалилась (ошибка: {balance.get('error')}), повторяем...")
+                    time.sleep(settings.PROXY_RETRY_DELAY)
+                else:
+                    error_log(f"{wallet_info_str} → Все {max_retries} попыток провалились (ошибка: {balance.get('error')}), пропускаем аккаунт")
+                    # Оставляем balance с error - он попадет в результаты как failed
 
         balances.append(balance)
 
+        # Задержка между запросами (если не последний и задержка > 0)
         if idx < total and delay > 0:
             time.sleep(delay)
 
+    # Подсчитываем статистику
     total_accounts = len(accounts)
     successful = sum(1 for b in balances if b.get('error') is None)
     failed = total_accounts - successful
 
+    # Подсчитываем суммы балансов
     sum_total = sum(b.get('total_balance', 0) for b in balances if b.get('error') is None)
     sum_stats = {"total": sum_total}
 
+    # Выводим статистику
     info_log("")
     info_log("=" * 80)
     info_log(f"СТАТИСТИКА ПО ЛИСТУ {sheet_name}")
@@ -391,6 +531,7 @@ def process_exchange_accounts(
     if failed > 0:
         error_log(f"Не удалось проверить: {failed}/{total_accounts}")
 
+    # Выводим суммы балансов
     info_log("")
     info_log("СУММЫ БАЛАНСОВ:")
     success_log(f"  ИТОГО:        ${sum_total:>15,.2f}")
@@ -413,6 +554,18 @@ def process_sheet(
     excel_handler: ExcelHandler,
     proxy_manager: Optional[ProxyManager] = None
 ) -> Optional[Dict]:
+    """
+    Обработать один лист из Excel
+
+    Args:
+        sheet_name: Имя листа
+        excel_handler: Обработчик Excel
+        proxy_manager: Менеджер прокси или None
+
+    Returns:
+        Словарь с данными {"wallets": [...], "balances": [...], "stats": {...}} или None при ошибке
+    """
+    # Биржи обрабатываются отдельно (используют API ключи вместо адресов)
     if sheet_name == "OKX":
         return process_exchange_accounts(sheet_name, excel_handler, get_okx_balance)
     elif sheet_name == "BINANCE":
@@ -432,11 +585,13 @@ def process_sheet(
     info_log(f"Обработка листа: {sheet_name}")
     info_log("=" * 80)
 
+    # Читаем кошельки
     wallets = excel_handler.read_wallets_from_sheet(sheet_name)
     if not wallets:
         warning_log(f"Лист {sheet_name} пустой или не найден, пропускаем")
         return None
 
+    # Определяем чекер по типу листа
     if sheet_name == "EVM":
         checker_func = get_evm_balance
     elif sheet_name == "SOL":
@@ -449,12 +604,15 @@ def process_sheet(
         error_log(f"Неизвестный тип листа: {sheet_name}")
         return None
 
+    # Обрабатываем кошельки
     balances = process_wallets(wallets, checker_func, proxy_manager)
 
+    # Подсчитываем статистику
     total_wallets = len(wallets)
     successful = sum(1 for b in balances if b.get('error') is None)
     failed = total_wallets - successful
 
+    # Подсчитываем суммы балансов
     sum_stats = {}
     if sheet_name == "EVM":
         sum_net = sum(b.get('net_balance', 0) for b in balances if b.get('error') is None)
@@ -505,6 +663,7 @@ def process_sheet(
             "total": sum_total
         }
 
+    # Выводим статистику по листу
     info_log("")
     info_log("=" * 80)
     info_log(f"СТАТИСТИКА ПО ЛИСТУ {sheet_name}")
@@ -513,6 +672,7 @@ def process_sheet(
     if failed > 0:
         error_log(f"Не удалось проверить: {failed}/{total_wallets}")
 
+    # Выводим суммы балансов
     if sum_stats:
         info_log("")
         info_log("СУММЫ БАЛАНСОВ:")
@@ -561,7 +721,9 @@ def process_sheet(
 
 
 def main():
+    """Главная функция"""
 
+    # Настройка логирования
     setup_logging()
 
     info_log(f"Файл данных: {settings.DATA_FILE}")
@@ -569,6 +731,7 @@ def main():
     info_log(f"Использование прокси: {'Да' if settings.USE_PROXY else 'Нет'}")
     info_log("=" * 80)
 
+    # Инициализируем менеджер прокси
     proxy_manager = None
     if settings.USE_PROXY:
         info_log("Инициализация менеджера прокси...")
@@ -580,13 +743,33 @@ def main():
         else:
             info_log(f"Загружено прокси: {proxy_manager.get_proxy_count()}")
 
+            # Проверяем прокси если включена проверка
+            if settings.VERIFY_PROXIES:
+                info_log("")
+                working_proxies = proxy_manager.verify_proxies(
+                    timeout=settings.PROXY_VERIFY_TIMEOUT,
+                    max_workers=settings.PROXY_VERIFY_THREADS
+                )
+
+                if working_proxies == 0:
+                    error_log("Ни один прокси не работает, продолжаем без прокси")
+                    proxy_manager = None
+                else:
+                    success_log(f"Доступно рабочих прокси: {working_proxies}")
+                info_log("")
+            else:
+                info_log(f"Проверка прокси отключена")
+
+    # Инициализируем обработчик Excel
     excel_handler = ExcelHandler(
         data_file=settings.DATA_FILE,
         output_dir=settings.OUTPUT_DIR
     )
 
+    # Инициализируем обработчик JSON
     json_handler = JSONHandler(output_dir="website/data")
 
+    # Обрабатываем каждый включенный лист и собираем результаты
     results_by_sheet = {}
     processed_sheets = []
     failed_sheets = []
@@ -598,12 +781,15 @@ def main():
                 results_by_sheet[sheet_name] = result
                 processed_sheets.append(sheet_name)
 
+                # Если обработали EVM лист - извлекаем статистику токенов из балансов
                 if sheet_name == "EVM":
                     wallets = result['wallets']
                     balances = result['balances']
 
+                    # Извлекаем токены из балансов (они уже собраны в get_evm_balance)
                     tokens_list = [balance.get('tokens') for balance in balances]
 
+                    # Добавляем результаты токенов в структуру (только если есть хоть один с токенами)
                     if any(tokens is not None for tokens in tokens_list):
                         info_log("")
                         info_log("=" * 80)
@@ -615,12 +801,15 @@ def main():
                             "tokens": tokens_list
                         }
 
+                # Если обработали SOL лист - извлекаем статистику токенов из балансов
                 if sheet_name == "SOL":
                     wallets = result['wallets']
                     balances = result['balances']
 
+                    # Извлекаем токены из балансов (они уже собраны в get_sol_balance)
                     tokens_list = [balance.get('tokens') for balance in balances]
 
+                    # Добавляем результаты токенов в структуру (только если есть хоть один с токенами)
                     if any(tokens is not None for tokens in tokens_list):
                         info_log("")
                         info_log("=" * 80)
@@ -632,12 +821,15 @@ def main():
                             "tokens": tokens_list
                         }
 
+                # Если обработали APT лист - извлекаем статистику токенов из балансов
                 if sheet_name == "APT":
                     wallets = result['wallets']
                     balances = result['balances']
 
+                    # Извлекаем токены из балансов (они уже собраны в get_apt_balance)
                     tokens_list = [balance.get('tokens') for balance in balances]
 
+                    # Добавляем результаты токенов в структуру (только если есть хоть один с токенами)
                     if any(tokens is not None for tokens in tokens_list):
                         info_log("")
                         info_log("=" * 80)
@@ -655,15 +847,19 @@ def main():
             error_log(f"Критическая ошибка при обработке листа {sheet_name}: {str(e)}")
             failed_sheets.append(sheet_name)
 
+    # Сохраняем все результаты в Excel и JSON
     output_file = None
     json_file = None
     if results_by_sheet:
         output_file = excel_handler.save_results_to_excel(results_by_sheet)
 
+        # Сохраняем также в JSON для веб-интерфейса
         if output_file:
+            # Используем то же имя файла для JSON
             json_filename = Path(output_file).stem + ".json"
             json_file = json_handler.save_results_to_json(results_by_sheet, json_filename)
 
+    # Собираем статистику
     total_all = 0
     successful_all = 0
     failed_all = 0
@@ -677,6 +873,7 @@ def main():
             failed_all += stats['failed']
             sheet_stats[sheet_name] = stats
 
+    # Собираем балансы
     grand_total = 0.0
     balance_details = {}
 
@@ -686,6 +883,7 @@ def main():
             balance_details[sheet_name] = sums
             grand_total += sums.get('total', 0)
 
+    # Компактный вывод итогов
     info_log("")
     if output_file:
         success_log(f"✓ Результаты: {output_file}")
@@ -694,6 +892,7 @@ def main():
 
     info_log("")
 
+    # Статистика по кошелькам
     if failed_all > 0:
         sheet_info = ', '.join([f"{name}: {sheet_stats[name]['successful']}/{sheet_stats[name]['total']}" for name in sheet_stats])
         warning_log(f"Проверено кошельков: {successful_all}/{total_all} успешно ({sheet_info})")
@@ -702,6 +901,7 @@ def main():
         sheet_info = ', '.join([f"{name}: {sheet_stats[name]['successful']}" for name in sheet_stats])
         success_log(f"Проверено кошельков: {successful_all}/{total_all} успешно ({sheet_info})")
 
+    # Балансы
     if balance_details:
         info_log("")
         info_log("Балансы:")
@@ -741,6 +941,7 @@ def main():
         info_log(f"  {'─' * 50}")
         success_log(f"  Общий баланс: ${grand_total:,.2f}")
 
+    # Прокси и завершение
     info_log("")
     if proxy_manager:
         proxy_msg = f"Прокси: {proxy_manager.get_available_proxy_count()}/{proxy_manager.get_proxy_count()} рабочих | Работа завершена!"
@@ -751,6 +952,7 @@ def main():
 
 
 def start_web_server():
+    """Запуск веб-сервера для просмотра результатов"""
     import http.server
     import socketserver
     import os
@@ -760,11 +962,13 @@ def start_web_server():
     PORT = 8000
     DIRECTORY = "website"
 
+    # Проверяем существование папки website
     if not os.path.exists(DIRECTORY):
         print(f"\nError: Folder '{DIRECTORY}' not found!")
         input("\nPress Enter to exit...")
         return
 
+    # Проверяем существование index.html
     if not os.path.exists(os.path.join(DIRECTORY, "index.html")):
         print(f"\nError: File 'index.html' not found in '{DIRECTORY}' folder!")
         input("\nPress Enter to exit...")
@@ -775,17 +979,20 @@ def start_web_server():
             super().__init__(*args, directory=DIRECTORY, **kwargs)
 
         def log_message(self, format, *args):
+            # Отключаем логи запросов для чистоты вывода
             pass
 
         def do_GET(self):
+            """Обработка GET запросов"""
+            # API endpoint для получения списка файлов
             if self.path == '/api/files':
                 self.send_api_files_list()
-            elif self.path == '/api/latest':
-                self.send_api_latest()
             else:
+                # Для всех остальных запросов используем стандартную обработку
                 super().do_GET()
 
         def send_api_files_list(self):
+            """Отправить список файлов в JSON формате"""
             import json
             from pathlib import Path
             from datetime import datetime
@@ -794,9 +1001,11 @@ def start_web_server():
                 data_dir = Path(DIRECTORY) / 'data'
                 files_list = []
 
+                # Сканируем папку data/ и ищем все balance_*.json файлы
                 if data_dir.exists():
                     for json_file in sorted(data_dir.glob('balance_*.json'), reverse=True):
                         try:
+                            # Читаем метаданные из файла
                             with open(json_file, 'r', encoding='utf-8') as f:
                                 data = json.load(f)
 
@@ -810,86 +1019,31 @@ def start_web_server():
                                 'total_balance': total_balance
                             })
                         except Exception as e:
+                            # Пропускаем поврежденные файлы
                             continue
 
+                # Формируем ответ
                 response = {
                     'files': files_list,
                     'count': len(files_list),
                     'generated_at': datetime.now().isoformat()
                 }
 
+                # Отправляем JSON ответ
                 response_data = json.dumps(response, ensure_ascii=False).encode('utf-8')
 
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json; charset=utf-8')
                 self.send_header('Content-length', str(len(response_data)))
-                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Access-Control-Allow-Origin', '*')  # CORS
                 self.end_headers()
                 self.wfile.write(response_data)
 
             except Exception as e:
+                # В случае ошибки возвращаем пустой список
                 error_response = {
                     'files': [],
                     'count': 0,
-                    'error': str(e)
-                }
-                response_data = json.dumps(error_response).encode('utf-8')
-
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json; charset=utf-8')
-                self.send_header('Content-length', str(len(response_data)))
-                self.end_headers()
-                self.wfile.write(response_data)
-
-        def send_api_latest(self):
-            import json
-            from pathlib import Path
-
-            try:
-                data_dir = Path(DIRECTORY) / 'data'
-
-                if data_dir.exists():
-                    json_files = sorted(data_dir.glob('balance_*.json'), reverse=True)
-
-                    if json_files:
-                        latest_file = json_files[0]
-
-                        with open(latest_file, 'r', encoding='utf-8') as f:
-                            data = json.load(f)
-
-                        response_data = json.dumps(data, ensure_ascii=False).encode('utf-8')
-
-                        self.send_response(200)
-                        self.send_header('Content-type', 'application/json; charset=utf-8')
-                        self.send_header('Content-length', str(len(response_data)))
-                        self.send_header('Access-Control-Allow-Origin', '*')
-                        self.end_headers()
-                        self.wfile.write(response_data)
-                    else:
-                        error_response = {
-                            'error': 'No balance files found'
-                        }
-                        response_data = json.dumps(error_response).encode('utf-8')
-
-                        self.send_response(404)
-                        self.send_header('Content-type', 'application/json; charset=utf-8')
-                        self.send_header('Content-length', str(len(response_data)))
-                        self.end_headers()
-                        self.wfile.write(response_data)
-                else:
-                    error_response = {
-                        'error': 'Data directory not found'
-                    }
-                    response_data = json.dumps(error_response).encode('utf-8')
-
-                    self.send_response(404)
-                    self.send_header('Content-type', 'application/json; charset=utf-8')
-                    self.send_header('Content-length', str(len(response_data)))
-                    self.end_headers()
-                    self.wfile.write(response_data)
-
-            except Exception as e:
-                error_response = {
                     'error': str(e)
                 }
                 response_data = json.dumps(error_response).encode('utf-8')
@@ -906,6 +1060,7 @@ def start_web_server():
 
             print(f"\nОткройте в браузере: {url}\n")
 
+            # Автоматически открываем браузер через 1 секунду
             Timer(1.0, lambda: webbrowser.open(url)).start()
 
             httpd.serve_forever()
@@ -922,6 +1077,8 @@ def start_web_server():
 
 
 def show_menu():
+    """Показать меню выбора режима работы"""
+    # Отображаем ASCII заставку
     display_ascii_banner()
 
     print("Режим:\n")

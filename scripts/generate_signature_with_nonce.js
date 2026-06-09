@@ -1,7 +1,12 @@
 #!/usr/bin/env node
+/**
+ * Генератор подписей с ВНЕШНИМ nonce (генерируется в Python)
+ * Решение проблемы с одинаковым nonce в Node.js
+ */
 
 const nodeCrypto = require('crypto');
 
+// Полифиллы для браузерного окружения
 try {
     Object.defineProperty(globalThis, 'crypto', {
         value: {
@@ -42,18 +47,22 @@ async function main() {
     const method = args[0];
     const url = args[1];
     const paramsJson = args[2];
-    const customNonce = args[3];
+    const customNonce = args[3]; // ВАЖНО: nonce передается извне!
 
     try {
-
+        // Инициализация WASM
         await sign.lW('');
 
+        // Парсим параметры
         const params = JSON.parse(paramsJson);
 
+        // Генерируем подпись с КАСТОМНЫМ nonce и timestamp
         const timestamp = Math.floor(Date.now() / 1000);
 
+        // Используем внутреннюю функцию cattleSF для генерации подписи с нашим nonce
         const signature = sign.cattleSF(method, url, params, customNonce, timestamp);
 
+        // Выводим результат
         console.log(JSON.stringify({
             'x-api-ts': timestamp,
             'x-api-nonce': customNonce,

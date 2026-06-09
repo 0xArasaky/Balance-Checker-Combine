@@ -1,0 +1,24 @@
+{
+  "name": "Balance Checker Combine",
+  "short_name": "Balance",
+  "description": "Private balance dashboard",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#010101",
+  "theme_color": "#010101",
+  "icons": [
+    {
+      "src": "assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

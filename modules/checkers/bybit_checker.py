@@ -1,3 +1,12 @@
+"""
+Bybit Checker - получение баланса с биржи Bybit
+
+Использует Bybit API v5 для получения баланса со всех счетов:
+- UNIFIED (UTA 2.0 и UTA 1.0 - спот, фьючерсы, опционы)
+- CONTRACT (деривативы для classic account)
+- SPOT (спот для classic account)
+"""
+
 import hmac
 import hashlib
 import time
@@ -7,10 +16,25 @@ import httpx
 
 from modules.utils.logger import info_log, error_log, debug_log
 
+# Bybit API
 BASE_URL = "https://api.bybit.com"
 
 
 def generate_signature(secret_key: str, timestamp: str, api_key: str, recv_window: str, query_string: str) -> str:
+    """
+    Генерирует подпись для Bybit API
+
+    Args:
+        secret_key: Секретный ключ API
+        timestamp: Временная метка в миллисекундах
+        api_key: API ключ
+        recv_window: Окно получения (обычно 5000)
+        query_string: Строка параметров запроса
+
+    Returns:
+        HMAC SHA256 подпись в hex формате
+    """
+    # Строка для подписи: timestamp + api_key + recv_window + queryString
     param_str = timestamp + api_key + recv_window + query_string
 
     return hmac.new(
@@ -21,6 +45,19 @@ def generate_signature(secret_key: str, timestamp: str, api_key: str, recv_windo
 
 
 def get_all_prices(timeout: int = 30) -> Dict[str, float]:
+    """
+    Получает цены ВСЕХ токенов за один запрос (оптимизация)
+
+    Использует /v5/market/tickers?category=spot для получения всех спот цен.
+    Извлекает цены из пар вида XXX/USDT.
+
+    Args:
+        timeout: Таймаут запроса
+
+    Returns:
+        Словарь {currency: price_in_usdt}
+        Например: {"BTC": 95000.0, "ETH": 3500.0, "USDT": 1.0}
+    """
     try:
         url = f"{BASE_URL}/v5/market/tickers?category=spot"
 
@@ -35,20 +72,25 @@ def get_all_prices(timeout: int = 30) -> Dict[str, float]:
 
             tickers = data.get("result", {}).get("list", [])
 
+            # Создаем словарь цен
             prices_dict = {}
 
             for ticker in tickers:
                 symbol = ticker.get("symbol", "")
 
+                # Обрабатываем только пары с USDT
                 if symbol.endswith("USDT"):
-                    base_currency = symbol[:-4]
+                    # Извлекаем базовый актив (BTC из BTCUSDT)
+                    base_currency = symbol[:-4]  # Убираем "USDT"
                     price = float(ticker.get("lastPrice", 0))
 
                     if price > 0:
                         prices_dict[base_currency] = price
 
+            # USDT = 1.0
             prices_dict["USDT"] = 1.0
 
+            # Другие стейблкоины тоже = 1.0 (на случай если их нет в парах)
             for stable in ["USDC", "USDD", "DAI", "TUSD", "USDP"]:
                 if stable not in prices_dict:
                     prices_dict[stable] = 1.0
@@ -66,9 +108,22 @@ def get_account_balance(
     account_type: str,
     timeout: int = 30
 ) -> dict:
+    """
+    Получает баланс для конкретного типа аккаунта Bybit
+
+    Args:
+        api_key: API ключ
+        secret_key: Секретный ключ
+        account_type: Тип аккаунта (UNIFIED, CONTRACT, SPOT)
+        timeout: Таймаут запроса
+
+    Returns:
+        Словарь с балансом в USD или ошибкой
+    """
     try:
         endpoint = "/v5/account/wallet-balance"
 
+        # Параметры запроса
         timestamp = str(int(time.time() * 1000))
         recv_window = "5000"
         params = {
@@ -76,8 +131,10 @@ def get_account_balance(
         }
         query_string = urlencode(params)
 
+        # Генерация подписи
         signature = generate_signature(secret_key, timestamp, api_key, recv_window, query_string)
 
+        # Заголовки для аутентификации
         headers = {
             'X-BAPI-API-KEY': api_key,
             'X-BAPI-SIGN': signature,
@@ -87,23 +144,28 @@ def get_account_balance(
             'Content-Type': 'application/json'
         }
 
+        # Полный URL
         url = f"{BASE_URL}{endpoint}?{query_string}"
 
+        # Запрос к API
         with httpx.Client(timeout=timeout) as client:
             response = client.get(url, headers=headers)
             response.raise_for_status()
 
             data = response.json()
 
+            # Проверка успешности ответа
             if data.get("retCode") != 0:
                 return {"balance": 0.0, "error": f"API_ERROR_{data.get('retCode')}"}
 
+            # Парсинг баланса
             result = data.get("result", {})
             account_list = result.get("list", [])
 
             if not account_list:
                 return {"balance": 0.0, "error": None}
 
+            # Получаем totalEquity (общий капитал в USD)
             total_equity = float(account_list[0].get("totalEquity", "0"))
 
             return {"balance": total_equity, "error": None}
@@ -122,9 +184,25 @@ def _get_account_tokens(
     account_type: str,
     timeout: int
 ) -> Optional[List[Dict]]:
+    """
+    Получить токены из конкретного типа аккаунта Bybit
+
+    Использует GET /v5/account/wallet-balance
+
+    Args:
+        api_key: API ключ
+        secret_key: Секретный ключ
+        account_type: Тип аккаунта (UNIFIED, SPOT, CONTRACT)
+        timeout: Таймаут запроса
+
+    Returns:
+        Список словарей с токенами: [{"asset": "BTC", "amount": 1.5, "category": "Unified"}, ...]
+        или None при ошибке
+    """
     try:
         endpoint = "/v5/account/wallet-balance"
 
+        # Параметры запроса
         timestamp = str(int(time.time() * 1000))
         recv_window = "5000"
         params = {
@@ -132,8 +210,10 @@ def _get_account_tokens(
         }
         query_string = urlencode(params)
 
+        # Генерация подписи
         signature = generate_signature(secret_key, timestamp, api_key, recv_window, query_string)
 
+        # Заголовки для аутентификации
         headers = {
             'X-BAPI-API-KEY': api_key,
             'X-BAPI-SIGN': signature,
@@ -143,27 +223,33 @@ def _get_account_tokens(
             'Content-Type': 'application/json'
         }
 
+        # Полный URL
         url = f"{BASE_URL}{endpoint}?{query_string}"
 
+        # Запрос к API
         with httpx.Client(timeout=timeout) as client:
             response = client.get(url, headers=headers)
             response.raise_for_status()
 
             data = response.json()
 
+            # Проверка успешности ответа
             if data.get("retCode") != 0:
                 debug_log(f"Ошибка получения токенов {account_type}: код {data.get('retCode')}")
                 return None
 
+            # Парсинг монет
             result = data.get("result", {})
             account_list = result.get("list", [])
 
             if not account_list:
                 return []
 
+            # Получаем список монет
             coin_list = account_list[0].get("coin", [])
             tokens = []
 
+            # Маппинг типа счета на читаемое название
             category_map = {
                 "UNIFIED": "Unified",
                 "SPOT": "Spot",
@@ -173,8 +259,10 @@ def _get_account_tokens(
 
             for coin_data in coin_list:
                 coin_name = coin_data.get("coin", "")
+                # walletBalance - общий баланс кошелька для этой монеты
                 wallet_balance = float(coin_data.get("walletBalance", 0))
 
+                # Пропускаем токены с нулевым балансом
                 if wallet_balance > 0:
                     tokens.append({
                         "asset": coin_name,
@@ -193,7 +281,29 @@ def _process_bybit_tokens(
     token_details: List[Dict],
     min_value: float = 1.0
 ) -> Optional[Dict[str, float]]:
+    """
+    Обработать детали токенов в статистику с группировкой и категориями
+
+    Группирует токены по ключу "symbol (category)".
+    Разделяет на отдельные токены (>= min_value) и категорию "Other" (< min_value).
+
+    Args:
+        token_details: Список словарей с деталями токенов
+            [{"asset": "BTC", "value": 100.0, "category": "Unified"}, ...]
+        min_value: Минимальная стоимость токена в USD для отдельного учета
+
+    Returns:
+        Словарь с токенами:
+        {
+            "BTC (Unified)": 100.50,
+            "USDT (Spot)": 75.46,
+            "Other": 2.13,
+            "error": None
+        }
+    """
     try:
+        # Группируем токены по ключу "asset (category)"
+        # Формат: {token_key: value, ...}
         tokens_by_key = {}
 
         for token in token_details:
@@ -201,10 +311,13 @@ def _process_bybit_tokens(
             value = token["value"]
             category = token["category"]
 
+            # Создаем уникальный ключ: "BTC (Unified)"
             token_key = f"{asset} ({category})"
 
+            # Суммируем если уже есть такой ключ
             tokens_by_key[token_key] = tokens_by_key.get(token_key, 0) + value
 
+        # Разделяем на отдельные токены и "Other"
         result = {}
         other_total = 0.0
 
@@ -214,6 +327,7 @@ def _process_bybit_tokens(
             else:
                 other_total += total_value
 
+        # Добавляем категорию "Other" если есть мелкие токены
         if other_total > 0:
             result["Other"] = round(other_total, 2)
 
@@ -234,10 +348,33 @@ def get_bybit_balance(
     collect_tokens: bool = False,
     min_token_value: float = 1.0
 ) -> dict:
+    """
+    Получает общий баланс со ВСЕХ счетов Bybit
+
+    Args:
+        api_key: API ключ Bybit
+        secret_key: Секретный ключ Bybit
+        proxy_dict: Словарь с прокси (не используется для Bybit)
+        timeout: Таймаут запроса в секундах
+        wallet_info: Строка с информацией о кошельке для логов
+        collect_tokens: Собирать ли статистику токенов
+        min_token_value: Минимальная стоимость токена для отдельного учета
+
+    Returns:
+        Словарь с балансом: {
+            "total_balance": float,
+            "tokens": dict или None,
+            "error": str или None
+        }
+    """
     try:
+        # ====================================================================
+        # СБОР ТОКЕНОВ (если запрошено)
+        # ====================================================================
         tokens_data = None
 
         if collect_tokens:
+            # Собираем токены из всех типов аккаунтов
             all_tokens = []
             account_types = ["UNIFIED", "CONTRACT", "SPOT"]
 
@@ -246,6 +383,7 @@ def get_bybit_balance(
                 if account_tokens:
                     all_tokens.extend(account_tokens)
 
+            # Получаем все цены одним запросом (оптимизация)
             try:
                 prices_dict = get_all_prices(timeout)
 
@@ -253,6 +391,7 @@ def get_bybit_balance(
                     debug_log("Не удалось получить цены токенов Bybit")
                     tokens_data = {"error": "PRICE_ERROR"}
                 else:
+                    # Конвертируем токены в USD
                     token_details = []
 
                     for token in all_tokens:
@@ -260,48 +399,65 @@ def get_bybit_balance(
                         amount = token["amount"]
                         category = token["category"]
 
+                        # Получаем цену
                         price_usdt = prices_dict.get(asset, 0)
 
                         if price_usdt > 0:
                             value_usd = amount * price_usdt
 
+                            # Собираем данные для обработки
                             token_details.append({
                                 "asset": asset,
                                 "value": value_usd,
                                 "category": category
                             })
 
+                    # Обрабатываем токены через функцию группировки
                     tokens_data = _process_bybit_tokens(token_details, min_token_value)
 
+                    # Логируем токены если есть wallet_info
                     if wallet_info and tokens_data and tokens_data.get("error") is None:
                         tokens_list = [f"{symbol}: ${value:,.2f}" for symbol, value in tokens_data.items() if symbol != "error"]
-                        info_log(f"{wallet_info} → Токены: {', '.join(tokens_list)}")
+                        if tokens_list:
+                            info_log(f"{wallet_info} → Токены: {', '.join(tokens_list)}")
 
             except Exception as e:
                 debug_log(f"Ошибка получения цен токенов Bybit: {str(e)}")
                 tokens_data = {"error": "PRICE_ERROR"}
 
+        # ====================================================================
+        # ПОЛУЧЕНИЕ ОБЩЕГО БАЛАНСА
+        # ====================================================================
 
+        # Типы аккаунтов для проверки
         account_types = ["UNIFIED", "CONTRACT", "SPOT"]
         total_balance = 0.0
         errors = []
 
+        # Получаем баланс для каждого типа аккаунта
         for account_type in account_types:
             result = get_account_balance(api_key, secret_key, account_type, timeout)
 
             if result.get("error") and result["error"] not in ["TIMEOUT", "UNKNOWN_ERROR"]:
+                # Игнорируем ошибки типа "аккаунт не существует" - это нормально
+                # API вернет ошибку если у пользователя нет этого типа аккаунта
                 continue
             elif result.get("error"):
+                # Критическая ошибка (timeout, unknown)
                 errors.append(f"{account_type}: {result['error']}")
             else:
+                # Успешно получили баланс
                 total_balance += result["balance"]
 
+        # Проверка на критические ошибки
         if errors:
             error_log(f"{wallet_info} → Ошибки: {', '.join(errors)}")
 
+        # Вывод в лог (только если не собирали токены, чтобы не дублировать)
         if not collect_tokens and wallet_info:
             info_log(f"{wallet_info} → Итого: ${total_balance:,.2f}")
         elif collect_tokens and wallet_info:
+            # Если собирали токены, выводим баланс после токенов
             info_log(f"{wallet_info} → Итого: ${total_balance:,.2f}")
 
         return {

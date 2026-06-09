@@ -18,6 +18,10 @@ PROXY_RETRY_DELAY = 10
 # HTTP request timeout (seconds)
 REQUEST_TIMEOUT = 30
 
+# Maximum retry count for exchange accounts
+# Wallet checks still use proxy rotation/retries in the processing loop.
+MAX_EXCHANGE_RETRIES = 5
+
 # Sheets to process
 # Possible values: "EVM", "SOL", "BTC", "APT", "OKX", "BINANCE", "BYBIT", "BACKPACK", "KUCOIN", "MEXC", "GATE"
 ENABLED_SHEETS = ["EVM", "SOL", "BTC", "APT", "OKX", "BINANCE", "BYBIT", "BACKPACK", "KUCOIN", "MEXC", "GATE"]
@@ -30,10 +34,19 @@ MIN_TOKEN_VALUE_TO_TRACK = 1
 # Minimum token value in USD to track separately in exchange statistics
 # Applies to all centralized exchanges (Binance, OKX, etc.)
 # Tokens below this value will be summed into the "Other" category
-MIN_EXCHANGE_TOKEN_VALUE_TO_TRACK = 0.01
+MIN_EXCHANGE_TOKEN_VALUE_TO_TRACK = 0.001
 
 # Proxy selection: random (True) or sequential (False)
 RANDOM_PROXY_SELECTION = True
+
+# Verify proxies before use
+VERIFY_PROXIES = False
+
+# Proxy verification timeout (seconds)
+PROXY_VERIFY_TIMEOUT = 10
+
+# Proxy verification thread count
+PROXY_VERIFY_THREADS = 10
 
 # Proxy file
 PROXY_FILE = "proxies.txt"

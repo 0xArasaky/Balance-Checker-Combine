@@ -1,15 +1,20 @@
+// Balance Checker Combine - Main JavaScript
+
+// Глобальные переменные
 let filesList = [];
 let currentFile = null;
 let currentData = null;
-let scrambleInstances = [];
-let isFirstLoad = true;
+let scrambleInstances = []; // Инстансы ScrambleText для управления
+let isFirstLoad = true; // Флаг первой загрузки
 
+// Элементы DOM
 const dataSelectorBtn = document.getElementById('dataSelectorBtn');
 const dataDropdown = document.getElementById('dataDropdown');
 const dropdownList = document.getElementById('dropdownList');
 const currentDate = document.getElementById('currentDate');
 const currentBalance = document.getElementById('currentBalance');
 
+// Форматирование баланса
 function formatBalance(balance) {
     return `$${balance.toLocaleString('en-US', {
         minimumFractionDigits: 0,
@@ -17,6 +22,7 @@ function formatBalance(balance) {
     })}`;
 }
 
+// Анимация баланса от 0 до целевого значения
 function animateBalance(element, targetValue, duration = 720) {
     const startTime = performance.now();
     const startValue = 0;
@@ -25,6 +31,7 @@ function animateBalance(element, targetValue, duration = 720) {
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / duration, 1);
 
+        // Easing function для плавности (easeOutCubic)
         const eased = 1 - Math.pow(1 - progress, 3);
 
         const currentValue = Math.round(startValue + (targetValue - startValue) * eased);
@@ -33,7 +40,7 @@ function animateBalance(element, targetValue, duration = 720) {
         if (progress < 1) {
             requestAnimationFrame(update);
         } else {
-
+            // Финальное значение для точности
             element.textContent = formatBalance(targetValue);
         }
     }
@@ -41,8 +48,17 @@ function animateBalance(element, targetValue, duration = 720) {
     requestAnimationFrame(update);
 }
 
+// Форматирование даты
 function formatDate(timestamp) {
-    const date = new Date(timestamp);
+    const normalizedTimestamp = typeof timestamp === 'string'
+        ? timestamp.replace(' ', 'T')
+        : timestamp;
+    const date = new Date(normalizedTimestamp);
+
+    if (Number.isNaN(date.getTime())) {
+        return timestamp || 'No date';
+    }
+
     const day = String(date.getDate()).padStart(2, '0');
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const year = date.getFullYear();
@@ -52,43 +68,70 @@ function formatDate(timestamp) {
     return `${day}.${month}.${year} ${hours}:${minutes}`;
 }
 
+// Загрузка списка файлов
 async function loadFilesList() {
     try {
-
-        const response = await fetch('/api/files');
+        const response = await fetch('data/files_list.json', { cache: 'no-store' });
         if (!response.ok) {
             throw new Error('Не удалось загрузить список файлов');
         }
 
         const data = await response.json();
-        filesList = data.files;
+        filesList = data.files || [];
 
+        // Загружаем последний файл (первый в списке, т.к. сервер сортирует по убыванию даты)
         if (filesList.length > 0) {
             currentFile = filesList[0];
             updateCurrentDisplay();
             populateDropdown();
-
-            loadAnalysisData();
+            loadAnalysisData(currentFile.filename);
         } else {
             currentDate.textContent = 'No data';
             currentBalance.textContent = '$0';
         }
     } catch (error) {
         console.error('Error loading files list:', error);
+        await loadLatestAnalysisFallback();
+    }
+}
+
+// Fallback: если список файлов недоступен, показываем последний скан напрямую
+async function loadLatestAnalysisFallback() {
+    try {
+        const response = await fetch('data/latest.json', { cache: 'no-store' });
+        if (!response.ok) {
+            throw new Error('Не удалось загрузить latest.json');
+        }
+
+        currentData = await response.json();
+        currentFile = {
+            filename: 'latest.json',
+            timestamp: currentData.metadata.timestamp_readable || currentData.metadata.timestamp,
+            total_balance: currentData.metadata.total_balance || 0
+        };
+        filesList = [currentFile];
+
+        updateCurrentDisplay();
+        populateDropdown();
+        displayTotalStats();
+    } catch (fallbackError) {
+        console.error('Error loading latest analysis fallback:', fallbackError);
         currentDate.textContent = 'Loading error';
         currentBalance.textContent = '$0';
     }
 }
 
+// Обновление отображения текущего файла
 function updateCurrentDisplay() {
     if (currentFile) {
         currentDate.textContent = formatDate(currentFile.timestamp);
-
+        // Сначала показываем $0, потом анимация запустится
         currentBalance.textContent = '$0';
         currentBalance.dataset.targetValue = currentFile.total_balance;
     }
 }
 
+// Заполнение выпадающего списка
 function populateDropdown() {
     dropdownList.innerHTML = '';
 
@@ -97,6 +140,7 @@ function populateDropdown() {
         item.className = 'dropdown-item';
         item.dataset.filename = file.filename;
 
+        // Добавляем класс selected для текущего файла
         if (currentFile && file.filename === currentFile.filename) {
             item.classList.add('selected');
         }
@@ -112,6 +156,7 @@ function populateDropdown() {
         item.appendChild(dateSpan);
         item.appendChild(balanceSpan);
 
+        // Обработчик клика
         item.addEventListener('click', (e) => {
             e.stopPropagation();
             selectFile(file);
@@ -121,10 +166,12 @@ function populateDropdown() {
     });
 }
 
+// Выбор файла
 function selectFile(file) {
     currentFile = file;
     updateCurrentDisplay();
 
+    // Обновляем selected класс
     const items = dropdownList.querySelectorAll('.dropdown-item');
     items.forEach(item => {
         if (item.dataset.filename === file.filename) {
@@ -134,16 +181,20 @@ function selectFile(file) {
         }
     });
 
+    // Закрываем выпадающий список
     toggleDropdown();
 
+    // Загружаем данные выбранного файла (анимация запустится в displayTotalStats)
     loadAnalysisData(file.filename);
 }
 
+// Переключение выпадающего списка
 function toggleDropdown() {
     const isActive = dataDropdown.classList.toggle('active');
     dataSelectorBtn.classList.toggle('active', isActive);
 }
 
+// Закрытие выпадающего списка при клике вне его
 document.addEventListener('click', (e) => {
     if (!dataSelectorBtn.contains(e.target) && !dataDropdown.contains(e.target)) {
         dataDropdown.classList.remove('active');
@@ -151,17 +202,16 @@ document.addEventListener('click', (e) => {
     }
 });
 
+// Обработчик клика на кнопку
 dataSelectorBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     toggleDropdown();
 });
 
-async function loadAnalysisData(filename = null) {
+// Загрузка данных из выбранного JSON файла
+async function loadAnalysisData(filename) {
     try {
-
-        const url = filename ? `data/${filename}` : '/api/latest';
-        const response = await fetch(url);
-
+        const response = await fetch(`data/${filename}`);
         if (!response.ok) {
             throw new Error('Failed to load analysis data');
         }
@@ -173,6 +223,7 @@ async function loadAnalysisData(filename = null) {
     }
 }
 
+// Отображение Total Stats (Categories и Tokens)
 function displayTotalStats() {
     if (!currentData || !currentData.total_stats) {
         return;
@@ -182,26 +233,41 @@ function displayTotalStats() {
     displayTokens();
     displayWalletGroups();
 
-    waitForCompleteRender().then(() => {
+    let renderFinished = false;
+
+    const finishRender = () => {
+        if (renderFinished) {
+            return;
+        }
+
+        renderFinished = true;
+
         if (isFirstLoad) {
             hideLoadingOverlay();
         } else {
-
+            // При смене даты запускаем все анимации
             startAllAnimations();
         }
-    });
+    };
+
+    // Ждем ПОЛНОГО рендеринга для обоих случаев (первая загрузка и смена даты)
+    waitForCompleteRender().then(finishRender);
+    setTimeout(finishRender, 1500);
 }
 
+// Ожидание ПОЛНОГО завершения рендеринга и layout
 function waitForCompleteRender() {
     return new Promise((resolve) => {
-
+        // Сначала проверяем готовность всех элементов
         waitForElementsReady().then(() => {
-
+            // Показываем все квадратики СРАЗУ (без анимации) для производительности
             showAllSquaresInstantly();
 
+            // Элементы готовы, но браузер может все еще делать layout
+            // Используем requestAnimationFrame цепочку для ожидания paint
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
-
+                    // Теперь ждем когда браузер будет idle (свободен)
                     waitForBrowserIdle().then(() => {
                         resolve();
                     });
@@ -211,48 +277,54 @@ function waitForCompleteRender() {
     });
 }
 
+// Показать все квадратики мгновенно (без анимации) для первой загрузки
 function showAllSquaresInstantly() {
-
+    // Сбрасываем старые классы если они есть
     const allSquares = document.querySelectorAll('.progress-square');
     allSquares.forEach(square => {
         square.classList.remove('visible', 'animate');
         square.style.animationDelay = '';
     });
 
+    // Показываем квадратики в основной статистике МГНОВЕННО
     const visibleSquares = document.querySelectorAll('.progress-bar .progress-square[data-visible="true"]');
     visibleSquares.forEach(square => {
         square.classList.add('visible');
     });
 }
 
+// Запуск всех анимаций (используется при смене даты)
 function startAllAnimations() {
-
+    // Сбрасываем все квадратики
     const allSquares = document.querySelectorAll('.progress-square');
     allSquares.forEach(square => {
         square.classList.remove('visible', 'animate');
         square.style.animationDelay = '';
     });
 
+    // Запускаем анимацию квадратиков через CSS (быстрее чем JS)
     requestAnimationFrame(() => {
         animateProgressBarsCSS();
-
+        // Балансы и scramble запускаются параллельно
         animateBalances();
         scrambleInstances.forEach(instance => instance.trigger());
     });
 }
 
+// Ожидание готовности всех элементов DOM
 function waitForElementsReady() {
     return new Promise((resolve) => {
         const checkReady = () => {
-
+            // Проверяем наличие ключевых элементов (кошельки могут отсутствовать - это нормально)
             const categoriesExist = document.querySelectorAll('.category-item').length > 0;
             const tokensExist = document.querySelectorAll('.token-item').length > 0;
             const progressBarsExist = document.querySelectorAll('.progress-square').length > 0;
 
+            // Если основные элементы существуют - готово (кошельки опциональны)
             if (categoriesExist && tokensExist && progressBarsExist) {
                 resolve();
             } else {
-
+                // Если нет - проверяем снова через 10ms
                 setTimeout(checkReady, 10);
             }
         };
@@ -261,34 +333,50 @@ function waitForElementsReady() {
     });
 }
 
+// Ожидание когда браузер завершит layout и будет свободен
 function waitForBrowserIdle() {
     return new Promise((resolve) => {
+        let isResolved = false;
 
+        const finish = () => {
+            if (isResolved) {
+                return;
+            }
+
+            isResolved = true;
+            requestAnimationFrame(() => {
+                resolve();
+            });
+        };
+
+        const timeoutId = setTimeout(finish, 700);
+
+        // Используем requestIdleCallback если доступен (лучший вариант)
         if ('requestIdleCallback' in window) {
             requestIdleCallback(() => {
-
-                requestAnimationFrame(() => {
-                    resolve();
-                });
-            }, { timeout: 500 });
+                clearTimeout(timeoutId);
+                finish();
+            }, { timeout: 500 }); // Максимум 500ms ожидания
         } else {
-
+            // Fallback для старых браузеров - просто задержка
             setTimeout(() => {
-                requestAnimationFrame(() => {
-                    resolve();
-                });
+                clearTimeout(timeoutId);
+                finish();
             }, 100);
         }
     });
 }
 
+// Отображение Categories
 function displayCategories() {
     const categoriesList = document.getElementById('categoriesList');
     const categories = currentData.total_stats.categories;
     const totalBalance = currentData.metadata.total_balance;
 
+    // Порядок категорий
     const categoryOrder = ['EVM', 'SOL', 'BTC', 'APT', 'OKX', 'BINANCE', 'BYBIT', 'BACKPACK', 'KUCOIN', 'MEXC', 'GATE'];
 
+    // Названия подкатегорий
     const subcategoryNames = {
         chains: 'Chains',
         defi_other: 'DeFi & Other',
@@ -314,9 +402,11 @@ function displayCategories() {
         const category = categories[categoryName];
         const categoryPercent = (category.total / totalBalance) * 100;
 
+        // Создаем элемент категории
         const categoryItem = document.createElement('div');
         categoryItem.className = 'category-item';
 
+        // Основная строка категории
         const mainRow = document.createElement('div');
         mainRow.className = 'category-main';
 
@@ -337,13 +427,14 @@ function displayCategories() {
 
         categoryItem.appendChild(mainRow);
 
+        // Подкатегории (если есть)
         const subcategories = getSubcategories(category, categoryName);
         if (subcategories.length > 0) {
-
+            // Сортируем подкатегории по убыванию значения
             subcategories.sort((a, b) => b.value - a.value);
 
             subcategories.forEach(sub => {
-
+                // Процент от родительской категории
                 const subPercent = (sub.value / category.total) * categoryPercent;
 
                 const subRow = document.createElement('div');
@@ -372,6 +463,7 @@ function displayCategories() {
     });
 }
 
+// Получение подкатегорий для категории
 function getSubcategories(category, categoryName) {
     const subcategories = [];
     const excludeKeys = ['total'];
@@ -406,6 +498,7 @@ function getSubcategories(category, categoryName) {
     return subcategories;
 }
 
+// Отображение Tokens
 function displayTokens() {
     const tokensList = document.getElementById('tokensList');
     const tokens = currentData.total_stats.tokens;
@@ -413,6 +506,7 @@ function displayTokens() {
 
     tokensList.innerHTML = '';
 
+    // Tokens уже отсортированы по убыванию в JSON
     for (const tokenName in tokens) {
         const tokenValue = tokens[tokenName];
         const tokenPercent = (tokenValue / totalBalance) * 100;
@@ -439,6 +533,7 @@ function displayTokens() {
     }
 }
 
+// Отображение Wallet Groups (все категории)
 function displayWalletGroups() {
     const walletGroupsSection = document.getElementById('walletGroupsSection');
 
@@ -449,18 +544,22 @@ function displayWalletGroups() {
 
     walletGroupsSection.innerHTML = '';
 
+    // Определяем порядок категорий
     const categoryOrder = ['EVM', 'SOL', 'BTC', 'APT', 'OKX', 'BINANCE', 'BYBIT', 'BACKPACK', 'KUCOIN', 'MEXC', 'GATE'];
 
+    // Определяем какие категории являются биржами
     const exchangeCategories = ['OKX', 'BINANCE', 'BYBIT', 'BACKPACK', 'KUCOIN', 'MEXC', 'GATE'];
 
+    // Обрабатываем каждую категорию
     categoryOrder.forEach(categoryName => {
         if (!currentData.categories[categoryName] || !currentData.categories[categoryName].items) {
-            return;
+            return; // Пропускаем если категория отсутствует
         }
 
         const items = currentData.categories[categoryName].items;
         const isExchange = exchangeCategories.includes(categoryName);
 
+        // Группируем по group
         const groupedItems = {};
         items.forEach(item => {
             const groupName = item.group || 'Unknown';
@@ -470,29 +569,32 @@ function displayWalletGroups() {
             groupedItems[groupName].push(item);
         });
 
+        // Создаем секции для каждой группы
         for (const groupName in groupedItems) {
             const groupItems = groupedItems[groupName];
 
             const groupDiv = document.createElement('div');
             groupDiv.className = 'wallet-group';
 
+            // Заголовок группы
             const groupTitle = document.createElement('h2');
             groupTitle.className = 'wallet-group-title';
             groupTitle.textContent = `${categoryName} - ${groupName}`;
             groupDiv.appendChild(groupTitle);
 
+            // Заголовок таблицы
             const tableHeader = document.createElement('div');
             tableHeader.className = 'wallet-table-header';
 
             if (isExchange) {
-
+                // Для бирж: Name, API Key, Balance
                 tableHeader.innerHTML = `
                     <span class="wallet-header-name">Name</span>
                     <span class="wallet-header-address">API Key</span>
                     <span class="wallet-header-balance">Balance</span>
                 `;
             } else {
-
+                // Для кошельков: Name, Address, Balance
                 tableHeader.innerHTML = `
                     <span class="wallet-header-name">Name</span>
                     <span class="wallet-header-address">Address</span>
@@ -501,6 +603,7 @@ function displayWalletGroups() {
             }
             groupDiv.appendChild(tableHeader);
 
+            // Создаем строки для каждого элемента
             groupItems.forEach(item => {
                 const itemRow = createWalletRow(item, categoryName, isExchange);
                 groupDiv.appendChild(itemRow);
@@ -511,18 +614,22 @@ function displayWalletGroups() {
     });
 }
 
+// Создание строки кошелька
 function createWalletRow(wallet, categoryName, isExchange = false) {
     const walletRow = document.createElement('div');
     walletRow.className = 'wallet-row';
 
+    // Обрезаем имя если длиннее 16 символов
     let displayName = wallet.name;
     if (displayName.length > 16) {
         displayName = displayName.substring(0, 13) + '...';
     }
 
+    // Основная строка
     const walletRowMain = document.createElement('div');
     walletRowMain.className = 'wallet-row-main';
 
+    // Создаем элементы отдельно чтобы добавить data-target-value
     const nameSpan = document.createElement('span');
     nameSpan.className = 'wallet-name';
     nameSpan.textContent = displayName;
@@ -531,10 +638,10 @@ function createWalletRow(wallet, categoryName, isExchange = false) {
     addressSpan.className = 'wallet-address';
 
     if (isExchange) {
-
+        // Для бирж показываем API Key (последние 4 символа)
         addressSpan.textContent = wallet.api_key_last4 ? `****${wallet.api_key_last4}` : 'N/A';
     } else {
-
+        // Для кошельков показываем адрес
         addressSpan.textContent = wallet.address || 'N/A';
     }
 
@@ -548,15 +655,18 @@ function createWalletRow(wallet, categoryName, isExchange = false) {
     walletRowMain.appendChild(balanceSpan);
     walletRow.appendChild(walletRowMain);
 
+    // Детали кошелька (скрыты по умолчанию)
     const walletDetails = createWalletDetails(wallet, categoryName);
     walletRow.appendChild(walletDetails);
 
+    // Обработчик клика для раскрытия/скрытия
     walletRowMain.addEventListener('click', () => {
         const wasExpanded = walletRow.classList.contains('expanded');
         walletRow.classList.toggle('expanded');
 
+        // Если только что раскрыли - запускаем анимацию
         if (!wasExpanded) {
-
+            // Небольшая задержка чтобы DOM успел отрендериться
             setTimeout(() => {
                 animateWalletDetails(walletRow);
             }, 10);
@@ -566,6 +676,7 @@ function createWalletRow(wallet, categoryName, isExchange = false) {
     return walletRow;
 }
 
+// Создание детальной информации кошелька
 function createWalletDetails(wallet, categoryName) {
     const walletDetails = document.createElement('div');
     walletDetails.className = 'wallet-details';
@@ -574,20 +685,25 @@ function createWalletDetails(wallet, categoryName) {
     const tokens = wallet.tokens || {};
     const totalBalance = balances.total;
 
+    // Вспомогательная функция для добавления токенов
     const addTokens = (parentLabel = null) => {
         if (Object.keys(tokens).length === 0) return;
 
+        // Отделяем "Other" от остальных токенов
         const otherEntry = Object.entries(tokens).find(([name]) => name === 'Other');
         const regularTokens = Object.entries(tokens).filter(([name]) => name !== 'Other');
 
+        // Сортируем обычные токены по убыванию
         const sortedTokens = regularTokens.sort((a, b) => b[1] - a[1]);
 
+        // Добавляем обычные токены
         sortedTokens.forEach(([tokenName, tokenValue]) => {
             const prefix = parentLabel ? '└─ ' : '';
             const tokenItem = createDetailItem(`${prefix}${tokenName}`, tokenValue, totalBalance, true);
             walletDetails.appendChild(tokenItem);
         });
 
+        // Добавляем "Other" в конец, если он есть
         if (otherEntry) {
             const [tokenName, tokenValue] = otherEntry;
             const prefix = parentLabel ? '└─ ' : '';
@@ -596,95 +712,112 @@ function createWalletDetails(wallet, categoryName) {
         }
     };
 
+    // === EVM ===
     if (categoryName === 'EVM') {
-
+        // Chains
         if (balances.chains > 0) {
             const chainsItem = createDetailItem('Chains', balances.chains, totalBalance, false);
             walletDetails.appendChild(chainsItem);
-            addTokens('Chains');
+            addTokens('Chains'); // Токены под Chains
         }
 
+        // DeFi & Other
         if (balances.defi_other > 0) {
             const defiItem = createDetailItem('DeFi & Other', balances.defi_other, totalBalance, false);
             walletDetails.appendChild(defiItem);
         }
 
+        // Polymarket Positions
         if (balances.polymarket_positions > 0) {
             const polyPosItem = createDetailItem('Polymarket Positions', balances.polymarket_positions, totalBalance, false);
             walletDetails.appendChild(polyPosItem);
         }
 
+        // Polymarket Total
         if (balances.polymarket_total > 0) {
             const polyTotalItem = createDetailItem('Polymarket Total', balances.polymarket_total, totalBalance, false);
             walletDetails.appendChild(polyTotalItem);
         }
 
+        // Hyperliquid Total
         if (balances.hyperliquid > 0) {
             const hyperItem = createDetailItem('Hyperliquid Total', balances.hyperliquid, totalBalance, false);
             walletDetails.appendChild(hyperItem);
         }
 
+        // Lighter
         if (balances.lighter > 0) {
             const lighterItem = createDetailItem('Lighter', balances.lighter, totalBalance, false);
             walletDetails.appendChild(lighterItem);
         }
     }
 
+    // === SOL ===
     else if (categoryName === 'SOL') {
-
+        // Tokens (основная категория)
         if (balances.tokens > 0) {
             const tokensItem = createDetailItem('Tokens', balances.tokens, totalBalance, false);
             walletDetails.appendChild(tokensItem);
-            addTokens('Tokens');
+            addTokens('Tokens'); // Токены под Tokens
         }
 
+        // DeFi
         if (balances.defi > 0) {
             const defiItem = createDetailItem('DeFi', balances.defi, totalBalance, false);
             walletDetails.appendChild(defiItem);
         }
     }
 
+    // === BTC ===
     else if (categoryName === 'BTC') {
-
+        // BTC
         if (balances.btc > 0) {
             const btcItem = createDetailItem('BTC', balances.btc, totalBalance, false);
             walletDetails.appendChild(btcItem);
         }
 
+        // Runes
         if (balances.runes > 0) {
             const runesItem = createDetailItem('Runes', balances.runes, totalBalance, false);
             walletDetails.appendChild(runesItem);
         }
 
+        // Inscriptions
         if (balances.inscriptions > 0) {
             const inscrItem = createDetailItem('Inscriptions', balances.inscriptions, totalBalance, false);
             walletDetails.appendChild(inscrItem);
         }
     }
 
+    // === APT ===
     else if (categoryName === 'APT') {
-
+        // APT (основной токен)
         if (balances.apt > 0) {
             const aptItem = createDetailItem('APT', balances.apt, totalBalance, false);
             walletDetails.appendChild(aptItem);
         }
 
+        // Staked APT
         if (balances.staked_apt > 0) {
             const stakedItem = createDetailItem('Staked APT', balances.staked_apt, totalBalance, false);
             walletDetails.appendChild(stakedItem);
         }
 
+        // Токены (все кроме "APT" и "Other")
         if (Object.keys(tokens).length > 0) {
             const otherEntry = Object.entries(tokens).find(([name]) => name === 'Other');
             const regularTokens = Object.entries(tokens).filter(([name]) => name !== 'APT' && name !== 'Other');
 
+            // Сортируем обычные токены по убыванию
             const sortedTokens = regularTokens.sort((a, b) => b[1] - a[1]);
 
+            // Добавляем обычные токены
             sortedTokens.forEach(([tokenName, tokenValue]) => {
                 const tokenItem = createDetailItem(tokenName, tokenValue, totalBalance, false);
                 walletDetails.appendChild(tokenItem);
             });
 
+            // Добавляем "Other" в конец, если он есть
             if (otherEntry) {
                 const [tokenName, tokenValue] = otherEntry;
                 const tokenItem = createDetailItem(tokenName, tokenValue, totalBalance, false);
@@ -693,14 +826,16 @@ function createWalletDetails(wallet, categoryName) {
         }
     }
 
+    // === Биржи ===
     else {
-
+        // Для бирж только показываем токены (если есть)
         addTokens(null);
     }
 
     return walletDetails;
 }
 
+// Создание элемента детали (категория или токен)
 function createDetailItem(name, value, totalBalance, isToken) {
     const detailItem = document.createElement('div');
     detailItem.className = 'wallet-detail-item';
@@ -712,6 +847,7 @@ function createDetailItem(name, value, totalBalance, isToken) {
     }
     nameSpan.textContent = name;
 
+    // Прогресс бар с квадратиками
     const percent = (value / totalBalance) * 100;
     const progressBar = createWalletDetailBar(percent, isToken);
 
@@ -730,8 +866,9 @@ function createDetailItem(name, value, totalBalance, isToken) {
     return detailItem;
 }
 
+// Создание прогресс бара для деталей кошелька
 function createWalletDetailBar(percent, isToken) {
-    const TOTAL_SQUARES = 130;
+    const TOTAL_SQUARES = 130; // 137 квадратов для деталей кошелька
     let squaresToShow = Math.round((percent / 100) * TOTAL_SQUARES);
 
     if (squaresToShow === 0) {
@@ -758,11 +895,14 @@ function createWalletDetailBar(percent, isToken) {
     return progressBar;
 }
 
+// Создание полоски прогресса с квадратиками
 function createProgressBar(percent, isSubcategory) {
-    const TOTAL_SQUARES = 144;
+    const TOTAL_SQUARES = 144; // Всего квадратиков для 100%
 
+    // Вычисляем сколько квадратиков показать
     let squaresToShow = Math.round((percent / 100) * TOTAL_SQUARES);
 
+    // Минимум 1 квадратик ВСЕГДА (даже если баланс = 0)
     if (squaresToShow === 0) {
         squaresToShow = 1;
     }
@@ -770,6 +910,7 @@ function createProgressBar(percent, isSubcategory) {
     const progressBar = document.createElement('div');
     progressBar.className = 'progress-bar';
 
+    // Создаем ТОЛЬКО нужные квадратики (оптимизация)
     for (let i = 0; i < squaresToShow; i++) {
         const square = document.createElement('div');
         square.className = 'progress-square';
@@ -787,6 +928,7 @@ function createProgressBar(percent, isSubcategory) {
     return progressBar;
 }
 
+// Анимация квадратиков через CSS (оптимизированная версия)
 function animateProgressBarsCSS() {
     const progressBars = document.querySelectorAll('.progress-bar');
 
@@ -794,14 +936,15 @@ function animateProgressBarsCSS() {
         const squares = bar.querySelectorAll('.progress-square[data-visible="true"]');
 
         squares.forEach((square, index) => {
-
+            // Используем CSS animation-delay вместо setTimeout (производительнее)
             square.style.animationDelay = `${index * 5}ms`;
-
+            // Добавляем ТОЛЬКО класс animate - animation с fill-mode: both сама установит visibility
             square.classList.add('animate');
         });
     });
 }
 
+// Старая функция animateProgressBars (для обратной совместимости с раскрытием кошельков)
 function animateProgressBars() {
     const progressBars = document.querySelectorAll('.progress-bar, .wallet-detail-bar');
 
@@ -809,26 +952,30 @@ function animateProgressBars() {
         const squares = bar.querySelectorAll('.progress-square[data-visible="true"]');
 
         squares.forEach((square, index) => {
-
+            // Задержка для появления один за одним внутри каждой полоски
             setTimeout(() => {
                 square.classList.add('visible');
-            }, index * 5);
+            }, index * 5); // 5ms задержка между квадратиками
         });
     });
 
+    // Запуск анимации всех балансов одновременно с квадратиками
     animateBalances();
 }
 
+// Анимация всех балансов на странице
 function animateBalances() {
-
+    // Максимальная длительность = 144 квадрата × 5ms = 720ms
     const duration = 720;
 
+    // Анимация баланса в кнопке выбора даты
     if (currentBalance.dataset.targetValue) {
         const targetValue = parseFloat(currentBalance.dataset.targetValue);
         currentBalance.textContent = '$0';
         animateBalance(currentBalance, targetValue, duration);
     }
 
+    // Анимация всех балансов категорий
     document.querySelectorAll('.category-balance').forEach(element => {
         if (element.dataset.targetValue) {
             const targetValue = parseFloat(element.dataset.targetValue);
@@ -837,6 +984,7 @@ function animateBalances() {
         }
     });
 
+    // Анимация всех балансов подкатегорий
     document.querySelectorAll('.subcategory-balance').forEach(element => {
         if (element.dataset.targetValue) {
             const targetValue = parseFloat(element.dataset.targetValue);
@@ -845,6 +993,7 @@ function animateBalances() {
         }
     });
 
+    // Анимация всех балансов токенов
     document.querySelectorAll('.token-balance').forEach(element => {
         if (element.dataset.targetValue) {
             const targetValue = parseFloat(element.dataset.targetValue);
@@ -853,6 +1002,7 @@ function animateBalances() {
         }
     });
 
+    // Анимация всех балансов в деталях кошельков
     document.querySelectorAll('.wallet-detail-balance').forEach(element => {
         if (element.dataset.targetValue) {
             const targetValue = parseFloat(element.dataset.targetValue);
@@ -861,6 +1011,7 @@ function animateBalances() {
         }
     });
 
+    // Анимация балансов в основных строках кошельков
     document.querySelectorAll('.wallet-total-balance').forEach(element => {
         if (element.dataset.targetValue) {
             const targetValue = parseFloat(element.dataset.targetValue);
@@ -870,22 +1021,25 @@ function animateBalances() {
     });
 }
 
+// Анимация деталей раскрытого кошелька
 function animateWalletDetails(walletRow) {
     const duration = 720;
 
+    // Анимация квадратиков в деталях кошелька
     const detailBars = walletRow.querySelectorAll('.wallet-detail-bar');
     detailBars.forEach(bar => {
         const squares = bar.querySelectorAll('.progress-square[data-visible="true"]');
         squares.forEach((square, index) => {
-
+            // Сначала скрываем все квадратики
             square.classList.remove('visible');
-
+            // Затем показываем с задержкой
             setTimeout(() => {
                 square.classList.add('visible');
             }, index * 5);
         });
     });
 
+    // Анимация балансов в деталях
     const detailBalances = walletRow.querySelectorAll('.wallet-detail-balance');
     detailBalances.forEach(element => {
         if (element.dataset.targetValue) {
@@ -896,23 +1050,25 @@ function animateWalletDetails(walletRow) {
     });
 }
 
+// Scramble Text Animation
 class ScrambleText {
     constructor(element, options = {}) {
         this.element = element;
-
+        // Сохраняем оригинальный HTML (с <br> если есть)
         this.originalHTML = element.innerHTML;
         this.originalText = element.dataset.text || element.textContent.replace(/\n/g, '');
 
+        // Определяем тип символов для мельтешения
         const isNumericVersion = /^\d+\.\d+\.\d+$/.test(this.originalText.trim());
         if (isNumericVersion) {
             this.chars = '0123456789';
-
+            // Для версии (цифр) - медленнее
             this.frameRate = options.frameRate || 30;
             this.iterations = options.iterations || 4;
             this.scrambleCount = options.scrambleCount || 2;
         } else {
             this.chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-
+            // Для текста - обычная скорость
             this.frameRate = options.frameRate || 16;
             this.iterations = options.iterations || 2;
             this.scrambleCount = options.scrambleCount || 20;
@@ -922,7 +1078,7 @@ class ScrambleText {
         this.frame = 0;
         this.isAnimating = false;
         this.lastAnimationTime = 0;
-        this.cooldown = 5000;
+        this.cooldown = 5000; // 5 секунд cooldown
 
         this.element.addEventListener('mouseenter', () => this.scrambleWithCooldown());
     }
@@ -930,20 +1086,21 @@ class ScrambleText {
     scrambleWithCooldown() {
         const now = Date.now();
         if (now - this.lastAnimationTime < this.cooldown) {
-            return;
+            return; // Cooldown активен, игнорируем
         }
         this.scramble();
     }
 
     trigger() {
-
+        // Принудительный запуск без проверки cooldown (для автозапуска)
         this.scramble();
     }
 
     getRandomChar(originalChar) {
-
+        // Определяем регистр оригинального символа
         const isUpperCase = originalChar === originalChar.toUpperCase();
 
+        // Фильтруем символы по регистру
         let availableChars;
         if (isUpperCase) {
             availableChars = this.chars.split('').filter(c => c === c.toUpperCase()).join('');
@@ -951,6 +1108,7 @@ class ScrambleText {
             availableChars = this.chars.split('').filter(c => c === c.toLowerCase() && c !== c.toUpperCase()).join('');
         }
 
+        // Если нет подходящих символов (например, для цифр), используем все
         if (availableChars.length === 0) {
             availableChars = this.chars;
         }
@@ -962,40 +1120,43 @@ class ScrambleText {
         if (this.isAnimating) return;
 
         this.isAnimating = true;
-        this.lastAnimationTime = Date.now();
+        this.lastAnimationTime = Date.now(); // Обновляем время последней анимации
         this.frame = 0;
 
         const animate = () => {
             let output = '';
-            let revealedCount = 0;
+            let revealedCount = 0; // Количество раскрытых символов
             let allComplete = true;
 
+            // Вычисляем сколько символов должно быть раскрыто
             const shouldReveal = Math.floor(this.frame / this.iterations);
 
             for (let i = 0; i < this.originalText.length; i++) {
                 const char = this.originalText[i];
 
+                // Вставляем <br> после "Balance Checker" (15 символов)
                 if (this.originalHTML.includes('<br>') && i === 15) {
                     output += '<br>';
                 }
 
+                // Пробелы и точки всегда показываем (не считаем как символы)
                 if (char === ' ' || char === '.') {
                     output += char;
                     continue;
                 }
 
                 if (revealedCount < shouldReveal) {
-
+                    // Символ раскрыт
                     output += char;
                     revealedCount++;
                 } else if (revealedCount >= shouldReveal && revealedCount < shouldReveal + this.scrambleCount) {
-
+                    // Символ мельтешит (следующие N символов после раскрытых)
                     const randomChar = this.getRandomChar(char);
                     output += `<span class="scramble-char">${randomChar}</span>`;
                     revealedCount++;
                     allComplete = false;
                 } else {
-
+                    // Остальное не показываем
                     allComplete = false;
                     break;
                 }
@@ -1007,7 +1168,7 @@ class ScrambleText {
                 this.frame++;
                 this.frameRequest = setTimeout(animate, this.frameRate);
             } else {
-
+                // Восстанавливаем оригинальный HTML с <br>
                 this.element.innerHTML = this.originalHTML;
                 this.isAnimating = false;
             }
@@ -1017,24 +1178,30 @@ class ScrambleText {
     }
 }
 
+// Скрытие loading overlay и запуск анимаций
 function hideLoadingOverlay() {
     const overlay = document.getElementById('loadingOverlay');
 
+    // Скрываем overlay с fade-out анимацией
     overlay.classList.add('hidden');
 
+    // После начала fade-out запускаем анимации (через 100ms)
     setTimeout(() => {
         startAllAnimations();
-        isFirstLoad = false;
+        isFirstLoad = false; // Больше не первая загрузка
     }, 100);
 }
 
+// Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Balance Checker Combine загружен');
 
+    // Инициализация scramble эффекта (до loadFilesList)
     document.querySelectorAll('.scramble-text').forEach(element => {
         const instance = new ScrambleText(element);
         scrambleInstances.push(instance);
     });
 
+    // Загрузка данных (overlay скроется автоматически после рендеринга)
     loadFilesList();
 });
