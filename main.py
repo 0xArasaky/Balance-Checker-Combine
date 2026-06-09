@@ -377,13 +377,8 @@ def process_exchange_accounts(
     balances = []
     total = len(accounts)
 
-    # Определяем задержку в зависимости от количества аккаунтов
-    if total < 10:
-        delay = 0.5
-    elif total <= 100:
-        delay = 0.2
-    else:
-        delay = 0  # Для > 100 можно использовать параллельную обработку или без задержки
+    # Биржевые API сильнее реагируют на частые запросы, поэтому задержка вынесена в settings.py
+    delay = getattr(settings, "EXCHANGE_REQUEST_DELAY", settings.REQUEST_DELAY)
 
     for idx, account in enumerate(accounts, 1):
         name = account['name']

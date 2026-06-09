@@ -22,6 +22,12 @@ REQUEST_TIMEOUT = 30
 # Wallet checks still use proxy rotation/retries in the processing loop.
 MAX_EXCHANGE_RETRIES = 5
 
+# Delay between Rabby API steps inside a single EVM wallet check
+EVM_RABBY_STEP_DELAY = 0.2
+
+# Delay between centralized exchange accounts
+EXCHANGE_REQUEST_DELAY = REQUEST_DELAY
+
 # Sheets to process
 # Possible values: "EVM", "SOL", "BTC", "APT", "OKX", "BINANCE", "BYBIT", "BACKPACK", "KUCOIN", "MEXC", "GATE"
 ENABLED_SHEETS = ["EVM", "SOL", "BTC", "APT", "OKX", "BINANCE", "BYBIT", "BACKPACK", "KUCOIN", "MEXC", "GATE"]
