@@ -6,6 +6,9 @@ let currentFile = null;
 let currentData = null;
 let scrambleInstances = []; // Инстансы ScrambleText для управления
 let isFirstLoad = true; // Флаг первой загрузки
+let activeHistoryRange = '30d'; // Активный диапазон графика истории
+let historyChartData = [];
+let historyChartAnimationFrame = null;
 
 // Элементы DOM
 const dataSelectorBtn = document.getElementById('dataSelectorBtn');
@@ -13,6 +16,23 @@ const dataDropdown = document.getElementById('dataDropdown');
 const dropdownList = document.getElementById('dropdownList');
 const currentDate = document.getElementById('currentDate');
 const currentBalance = document.getElementById('currentBalance');
+const historySection = document.getElementById('historySection');
+const historyCanvas = document.getElementById('historyCanvas');
+const historyChartTooltip = document.getElementById('historyChartTooltip');
+const historyChartDot = document.getElementById('historyChartDot');
+const historyRangeToggle = document.getElementById('historyRangeToggle');
+const historyRangeSlider = document.getElementById('historyRangeSlider');
+const historyRangeButtons = document.querySelectorAll('.balance-history-range__btn');
+const topSourcesSection = document.getElementById('topSourcesSection');
+const topSourcesList = document.getElementById('topSourcesList');
+
+const HISTORY_RANGE_DAYS = {
+    '7d': 7,
+    '30d': 30,
+    '1y': 365,
+    all: null
+};
+const HISTORY_DAY_MS = 24 * 60 * 60 * 1000;
 
 // Форматирование баланса
 function formatBalance(balance) {
@@ -68,6 +88,29 @@ function formatDate(timestamp) {
     return `${day}.${month}.${year} ${hours}:${minutes}`;
 }
 
+// Короткая дата для подписей графика
+function formatShortDate(date) {
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = String(date.getFullYear()).slice(-2);
+
+    return `${day}.${month}.${year}`;
+}
+
+// Парсинг timestamp из files_list.json
+function parseHistoryDate(timestamp) {
+    const normalizedTimestamp = typeof timestamp === 'string'
+        ? timestamp.replace(' ', 'T')
+        : timestamp;
+    const date = new Date(normalizedTimestamp);
+
+    if (Number.isNaN(date.getTime())) {
+        return null;
+    }
+
+    return date;
+}
+
 // Загрузка списка файлов
 async function loadFilesList() {
     try {
@@ -84,6 +127,7 @@ async function loadFilesList() {
             currentFile = filesList[0];
             updateCurrentDisplay();
             populateDropdown();
+            displayHistoryChart();
             loadAnalysisData(currentFile.filename);
         } else {
             currentDate.textContent = 'No data';
@@ -113,6 +157,7 @@ async function loadLatestAnalysisFallback() {
 
         updateCurrentDisplay();
         populateDropdown();
+        displayHistoryChart();
         displayTotalStats();
     } catch (fallbackError) {
         console.error('Error loading latest analysis fallback:', fallbackError);
@@ -166,6 +211,389 @@ function populateDropdown() {
     });
 }
 
+// Получение точек истории баланса
+function getHistoryPoints() {
+    return filesList
+        .map(file => {
+            const date = parseHistoryDate(file.timestamp);
+            const balance = Number(file.total_balance || 0);
+
+            return {
+                filename: file.filename,
+                date,
+                balance
+            };
+        })
+        .filter(point => {
+            if (!point.date || !Number.isFinite(point.balance)) {
+                return false;
+            }
+
+            // Демонстрационный пример не должен ломать масштаб реальной истории.
+            return point.filename !== 'balance_2000-01-01_00-00-00.json';
+        })
+        .sort((a, b) => a.date - b.date);
+}
+
+// Фильтрация точек истории по активному диапазону
+function getVisibleHistoryPoints(points) {
+    const rangeDays = HISTORY_RANGE_DAYS[activeHistoryRange];
+
+    if (!rangeDays || points.length === 0) {
+        return points;
+    }
+
+    const latestTime = points[points.length - 1].date.getTime();
+    const minTime = latestTime - (rangeDays * HISTORY_DAY_MS);
+
+    return points.filter(point => point.date.getTime() >= minTime);
+}
+
+// Обновление активной кнопки диапазона
+function updateHistoryRangeButtons() {
+    historyRangeButtons.forEach(button => {
+        button.classList.toggle('balance-history-range__btn--active', button.dataset.range === activeHistoryRange);
+    });
+}
+
+// Перемещение slider-а диапазона как в PolyEarn
+function moveHistoryRangeSlider(button) {
+    if (!historyRangeSlider || !historyRangeToggle || !button) {
+        return;
+    }
+
+    const selectorRect = historyRangeToggle.getBoundingClientRect();
+    const buttonRect = button.getBoundingClientRect();
+    historyRangeSlider.style.left = `${buttonRect.left - selectorRect.left}px`;
+    historyRangeSlider.style.width = `${buttonRect.width}px`;
+}
+
+function getActiveHistoryRangeButton() {
+    const activeButton = document.querySelector(`.balance-history-range__btn[data-range="${activeHistoryRange}"]`);
+    return activeButton || document.querySelector('.balance-history-range__btn--active');
+}
+
+function initHistoryRangeSlider() {
+    const activeButton = getActiveHistoryRangeButton();
+    if (!activeButton || !historyRangeSlider) {
+        return;
+    }
+
+    historyRangeSlider.style.transition = 'none';
+    moveHistoryRangeSlider(activeButton);
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            historyRangeSlider.style.transition = 'left 0.25s ease, width 0.25s ease';
+        });
+    });
+}
+
+function syncHistoryRangeControls() {
+    updateHistoryRangeButtons();
+
+    const activeButton = getActiveHistoryRangeButton();
+    if (!activeButton) {
+        return;
+    }
+
+    if (!historyRangeSlider || !historyRangeSlider.style.width) {
+        initHistoryRangeSlider();
+        return;
+    }
+
+    moveHistoryRangeSlider(activeButton);
+}
+
+// Отображение графика истории
+function displayHistoryChart(animate = true) {
+    if (!historySection || !historyCanvas) {
+        return;
+    }
+
+    const allPoints = getHistoryPoints();
+
+    if (allPoints.length <= 7) {
+        historySection.hidden = true;
+        historyChartData = [];
+        historySection.classList.remove('balance-history--loaded');
+        return;
+    }
+
+    const points = getVisibleHistoryPoints(allPoints);
+    historySection.hidden = false;
+    syncHistoryRangeControls();
+    renderHistoryChart(points, animate);
+}
+
+function getHistoryCanvasMetrics(canvas) {
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+
+    canvas.width = Math.max(1, Math.round(rect.width * dpr));
+    canvas.height = Math.max(1, Math.round(rect.height * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    return {
+        ctx,
+        width: rect.width,
+        height: rect.height,
+        padding: { top: 10, right: 0, bottom: 10, left: 0 }
+    };
+}
+
+function getHistoryChartRange(values) {
+    const numericValues = values
+        .map(value => Number(value))
+        .filter(value => Number.isFinite(value));
+
+    if (numericValues.length === 0) {
+        return { min: 0, max: 1 };
+    }
+
+    const minValue = Math.min(...numericValues);
+    const maxValue = Math.max(...numericValues, 1);
+
+    if (activeHistoryRange === 'all' || minValue <= 0) {
+        return { min: 0, max: Math.max(maxValue * 1.05, 1) };
+    }
+
+    const span = Math.max(maxValue - minValue, maxValue * 0.01, 1);
+    const padding = span * 0.5;
+
+    return {
+        min: Math.max(0, minValue - padding),
+        max: maxValue + padding
+    };
+}
+
+function getHistoryChartY(value, range, padding, chartHeight) {
+    const span = Math.max(range.max - range.min, 1);
+    return padding.top + chartHeight - (((value - range.min) / span) * chartHeight);
+}
+
+function getHistoryChartTimeDomain(points) {
+    if (!points || points.length === 0) {
+        return { minTime: 0, maxTime: 1 };
+    }
+
+    const latestTime = points[points.length - 1].date.getTime();
+    const maxTime = Number.isFinite(latestTime) ? latestTime : Date.now();
+    const rangeDays = HISTORY_RANGE_DAYS[activeHistoryRange];
+    let minTime = rangeDays
+        ? maxTime - (rangeDays * HISTORY_DAY_MS)
+        : points[0].date.getTime();
+
+    if (!Number.isFinite(minTime) || minTime >= maxTime) {
+        minTime = maxTime - HISTORY_DAY_MS;
+    }
+
+    return { minTime, maxTime };
+}
+
+function getHistoryChartX(point, timeDomain, padding, chartWidth) {
+    const pointTime = point.date.getTime();
+    const span = Math.max(timeDomain.maxTime - timeDomain.minTime, 1);
+    const normalized = Math.max(0, Math.min(1, (pointTime - timeDomain.minTime) / span));
+
+    return padding.left + (normalized * chartWidth);
+}
+
+function drawHistoryGrid(ctx, width, height, padding, range, progress) {
+    const chartHeight = height - padding.top - padding.bottom;
+    const gridLines = 4;
+    const alpha = Math.min(progress * 2, 1);
+
+    for (let i = 0; i <= gridLines; i++) {
+        const y = padding.top + (chartHeight * i / gridLines);
+
+        ctx.strokeStyle = `rgba(21, 21, 21, ${0.9 * alpha})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(width - padding.right, y);
+        ctx.stroke();
+    }
+}
+
+function drawHistoryChart(canvas, points, progress = 1) {
+    if (!canvas || !points || points.length === 0) {
+        return;
+    }
+
+    const { ctx, width, height, padding } = getHistoryCanvasMetrics(canvas);
+    const values = points.map(point => point.balance);
+    const range = getHistoryChartRange(values);
+    const timeDomain = getHistoryChartTimeDomain(points);
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+    const bottom = height - padding.bottom;
+    const getX = (point) => getHistoryChartX(point, timeDomain, padding, chartWidth);
+    const getY = (value) => getHistoryChartY(value, range, padding, chartHeight);
+    const clipWidth = padding.left + chartWidth * progress;
+
+    ctx.clearRect(0, 0, width, height);
+    drawHistoryGrid(ctx, width, height, padding, range, progress);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, clipWidth, height);
+    ctx.clip();
+
+    const gradient = ctx.createLinearGradient(0, padding.top, 0, bottom);
+    gradient.addColorStop(0, 'rgba(128, 128, 128, 0.18)');
+    gradient.addColorStop(1, 'rgba(128, 128, 128, 0.02)');
+
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.moveTo(padding.left, bottom);
+    points.forEach(point => {
+        ctx.lineTo(getX(point), getY(point.balance));
+    });
+    ctx.lineTo(getX(points[points.length - 1]), bottom);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = '#808080';
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    points.forEach((point, index) => {
+        if (index === 0) {
+            ctx.moveTo(getX(point), getY(point.balance));
+        } else {
+            ctx.lineTo(getX(point), getY(point.balance));
+        }
+    });
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+function animateHistoryChart(points, duration = 760) {
+    if (!historyCanvas) {
+        return;
+    }
+
+    if (historyChartAnimationFrame) {
+        cancelAnimationFrame(historyChartAnimationFrame);
+        historyChartAnimationFrame = null;
+    }
+
+    const startedAt = performance.now();
+
+    const frame = (now) => {
+        const progress = Math.min((now - startedAt) / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+
+        drawHistoryChart(historyCanvas, points, eased);
+
+        if (progress < 1) {
+            historyChartAnimationFrame = requestAnimationFrame(frame);
+        } else {
+            drawHistoryChart(historyCanvas, points, 1);
+            historyChartAnimationFrame = null;
+        }
+    };
+
+    historyChartAnimationFrame = requestAnimationFrame(frame);
+}
+
+function renderHistoryChart(points, animate = true) {
+    historyChartData = points || [];
+
+    if (!historyChartData.length) {
+        historySection.classList.remove('balance-history--loaded');
+        return;
+    }
+
+    historySection.classList.add('balance-history--loaded');
+
+    if (animate) {
+        animateHistoryChart(historyChartData);
+    } else {
+        drawHistoryChart(historyCanvas, historyChartData, 1);
+    }
+}
+
+function setupHistoryChartTooltip() {
+    if (!historyCanvas || !historyChartTooltip) {
+        return;
+    }
+
+    const padding = { top: 10, right: 0, bottom: 10, left: 0 };
+
+    historyCanvas.addEventListener('mousemove', (event) => {
+        const data = historyChartData;
+        if (!data || data.length === 0) {
+            return;
+        }
+
+        const rect = historyCanvas.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const chartWidth = rect.width - padding.left - padding.right;
+        const chartHeight = rect.height - padding.top - padding.bottom;
+
+        if (x < padding.left || x > rect.width - padding.right) {
+            historyChartTooltip.classList.remove('balance-history-tooltip--visible');
+            if (historyChartDot) {
+                historyChartDot.classList.remove('balance-history-dot--visible');
+            }
+            return;
+        }
+
+        const timeDomain = getHistoryChartTimeDomain(data);
+        let index = 0;
+        let closestDistance = Infinity;
+
+        data.forEach((item, itemIndex) => {
+            const itemX = getHistoryChartX(item, timeDomain, padding, chartWidth);
+            const distance = Math.abs(itemX - x);
+
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                index = itemIndex;
+            }
+        });
+
+        const point = data[index];
+        const values = data.map(item => item.balance);
+        const range = getHistoryChartRange(values);
+        const pointX = getHistoryChartX(point, timeDomain, padding, chartWidth);
+        const pointY = getHistoryChartY(point.balance, range, padding, chartHeight);
+        const valueEl = historyChartTooltip.querySelector('.balance-history-tooltip__value');
+        const dateEl = historyChartTooltip.querySelector('.balance-history-tooltip__date');
+
+        if (valueEl) {
+            valueEl.textContent = formatBalance(point.balance);
+        }
+
+        if (dateEl) {
+            dateEl.textContent = formatDate(point.date.toISOString());
+        }
+
+        const tooltipWidth = historyChartTooltip.offsetWidth || 136;
+        const tooltipX = Math.max(tooltipWidth / 2, Math.min(rect.width - tooltipWidth / 2, pointX));
+        historyChartTooltip.style.left = `${tooltipX}px`;
+        historyChartTooltip.style.top = `${pointY - 10}px`;
+        historyChartTooltip.classList.add('balance-history-tooltip--visible');
+
+        if (historyChartDot) {
+            historyChartDot.style.left = `${pointX}px`;
+            historyChartDot.style.top = `${pointY}px`;
+            historyChartDot.classList.add('balance-history-dot--visible');
+        }
+    });
+
+    historyCanvas.addEventListener('mouseleave', () => {
+        historyChartTooltip.classList.remove('balance-history-tooltip--visible');
+        if (historyChartDot) {
+            historyChartDot.classList.remove('balance-history-dot--visible');
+        }
+    });
+}
+
 // Выбор файла
 function selectFile(file) {
     currentFile = file;
@@ -185,6 +613,7 @@ function selectFile(file) {
     toggleDropdown();
 
     // Загружаем данные выбранного файла (анимация запустится в displayTotalStats)
+    displayHistoryChart();
     loadAnalysisData(file.filename);
 }
 
@@ -229,6 +658,7 @@ function displayTotalStats() {
         return;
     }
 
+    displayTopSources();
     displayCategories();
     displayTokens();
     displayWalletGroups();
@@ -367,6 +797,96 @@ function waitForBrowserIdle() {
     });
 }
 
+// Получение топа самых крупных источников
+function getTopSources(limit = 5) {
+    if (!currentData || !currentData.categories) {
+        return [];
+    }
+
+    const exchangeCategories = ['OKX', 'BINANCE', 'BYBIT', 'BACKPACK', 'KUCOIN', 'MEXC', 'GATE'];
+    const sources = [];
+
+    for (const categoryName in currentData.categories) {
+        const category = currentData.categories[categoryName];
+        const items = category.items || [];
+        const sourceType = exchangeCategories.includes(categoryName) ? 'Exchange' : 'Wallet';
+
+        items.forEach(item => {
+            const balance = Number((item.balances || {}).total || 0);
+
+            if (balance <= 0) {
+                return;
+            }
+
+            const name = item.name || categoryName;
+            const group = item.group || '';
+            const identifier = item.api_key_last4
+                ? `****${item.api_key_last4}`
+                : (item.address || '');
+
+            sources.push({
+                categoryName,
+                sourceType,
+                name,
+                group,
+                identifier,
+                balance,
+                label: name
+            });
+        });
+    }
+
+    return sources
+        .sort((a, b) => b.balance - a.balance)
+        .slice(0, limit);
+}
+
+// Отображение топа самых крупных источников
+function displayTopSources() {
+    if (!topSourcesSection || !topSourcesList) {
+        return;
+    }
+
+    const sources = getTopSources(5);
+    const totalBalance = Number((currentData.metadata || {}).total_balance || 0);
+
+    topSourcesList.innerHTML = '';
+
+    if (sources.length === 0 || totalBalance <= 0) {
+        topSourcesSection.hidden = true;
+        return;
+    }
+
+    topSourcesSection.hidden = false;
+
+    sources.forEach(source => {
+        const sourcePercent = (source.balance / totalBalance) * 100;
+        const sourceItem = document.createElement('div');
+        sourceItem.className = 'top-source-item';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'top-source-name';
+        nameSpan.textContent = source.label;
+        nameSpan.title = [
+            `${source.sourceType}: ${source.categoryName}`,
+            source.group ? `Group: ${source.group}` : null,
+            source.identifier ? `ID: ${source.identifier}` : null
+        ].filter(Boolean).join(' | ');
+
+        const progressBar = createProgressBar(sourcePercent, false);
+
+        const balanceSpan = document.createElement('span');
+        balanceSpan.className = 'top-source-balance';
+        balanceSpan.textContent = '$0';
+        balanceSpan.dataset.targetValue = source.balance;
+
+        sourceItem.appendChild(nameSpan);
+        sourceItem.appendChild(progressBar);
+        sourceItem.appendChild(balanceSpan);
+        topSourcesList.appendChild(sourceItem);
+    });
+}
+
 // Отображение Categories
 function displayCategories() {
     const categoriesList = document.getElementById('categoriesList');
@@ -374,7 +894,7 @@ function displayCategories() {
     const totalBalance = currentData.metadata.total_balance;
 
     // Порядок категорий
-    const categoryOrder = ['EVM', 'SOL', 'BTC', 'APT', 'OKX', 'BINANCE', 'BYBIT', 'BACKPACK', 'KUCOIN', 'MEXC', 'GATE'];
+    const categoryOrder = ['EVM', 'SOL', 'BTC', 'APT', 'TRX', 'OKX', 'BINANCE', 'BYBIT', 'BACKPACK', 'KUCOIN', 'MEXC', 'GATE'];
 
     // Названия подкатегорий
     const subcategoryNames = {
@@ -390,6 +910,8 @@ function displayCategories() {
         runes: 'Runes',
         inscriptions: 'Inscriptions',
         apt: 'APT',
+        trx: 'TRX',
+        usdt: 'USDT',
         other_tokens: 'Other Tokens',
         staked_apt: 'Staked APT'
     };
@@ -484,6 +1006,8 @@ function getSubcategories(category, categoryName) {
             runes: 'Runes',
             inscriptions: 'Inscriptions',
             apt: 'APT',
+            trx: 'TRX',
+            usdt: 'USDT',
             other_tokens: 'Other Tokens',
             staked_apt: 'Staked APT'
         };
@@ -545,7 +1069,7 @@ function displayWalletGroups() {
     walletGroupsSection.innerHTML = '';
 
     // Определяем порядок категорий
-    const categoryOrder = ['EVM', 'SOL', 'BTC', 'APT', 'OKX', 'BINANCE', 'BYBIT', 'BACKPACK', 'KUCOIN', 'MEXC', 'GATE'];
+    const categoryOrder = ['EVM', 'SOL', 'BTC', 'APT', 'TRX', 'OKX', 'BINANCE', 'BYBIT', 'BACKPACK', 'KUCOIN', 'MEXC', 'GATE'];
 
     // Определяем какие категории являются биржами
     const exchangeCategories = ['OKX', 'BINANCE', 'BYBIT', 'BACKPACK', 'KUCOIN', 'MEXC', 'GATE'];
@@ -826,6 +1350,39 @@ function createWalletDetails(wallet, categoryName) {
         }
     }
 
+    // === TRX ===
+    else if (categoryName === 'TRX') {
+        if (balances.trx > 0) {
+            const trxItem = createDetailItem('TRX', balances.trx, totalBalance, false);
+            walletDetails.appendChild(trxItem);
+        }
+
+        if (balances.usdt > 0) {
+            const usdtItem = createDetailItem('USDT', balances.usdt, totalBalance, false);
+            walletDetails.appendChild(usdtItem);
+        }
+
+        if (balances.other_tokens > 0) {
+            const otherTokensItem = createDetailItem('Other Tokens', balances.other_tokens, totalBalance, false);
+            walletDetails.appendChild(otherTokensItem);
+
+            const otherEntry = Object.entries(tokens).find(([name]) => name === 'Other');
+            const regularTokens = Object.entries(tokens).filter(([name]) => !['TRX', 'USDT', 'Other'].includes(name));
+            const sortedTokens = regularTokens.sort((a, b) => b[1] - a[1]);
+
+            sortedTokens.forEach(([tokenName, tokenValue]) => {
+                const tokenItem = createDetailItem(`└─ ${tokenName}`, tokenValue, totalBalance, true);
+                walletDetails.appendChild(tokenItem);
+            });
+
+            if (otherEntry) {
+                const [tokenName, tokenValue] = otherEntry;
+                const tokenItem = createDetailItem(`└─ ${tokenName}`, tokenValue, totalBalance, true);
+                walletDetails.appendChild(tokenItem);
+            }
+        }
+    }
+
     // === Биржи ===
     else {
         // Для бирж только показываем токены (если есть)
@@ -995,6 +1552,15 @@ function animateBalances() {
 
     // Анимация всех балансов токенов
     document.querySelectorAll('.token-balance').forEach(element => {
+        if (element.dataset.targetValue) {
+            const targetValue = parseFloat(element.dataset.targetValue);
+            element.textContent = '$0';
+            animateBalance(element, targetValue, duration);
+        }
+    });
+
+    // Анимация балансов топ-источников
+    document.querySelectorAll('.top-source-balance').forEach(element => {
         if (element.dataset.targetValue) {
             const targetValue = parseFloat(element.dataset.targetValue);
             element.textContent = '$0';
@@ -1202,6 +1768,28 @@ document.addEventListener('DOMContentLoaded', () => {
         scrambleInstances.push(instance);
     });
 
+    setupHistoryChartTooltip();
+    updateHistoryRangeButtons();
+    initHistoryRangeSlider();
+
     // Загрузка данных (overlay скроется автоматически после рендеринга)
     loadFilesList();
+});
+
+historyRangeButtons.forEach(button => {
+    button.addEventListener('click', () => {
+        activeHistoryRange = button.dataset.range || '30d';
+        updateHistoryRangeButtons();
+        moveHistoryRangeSlider(button);
+        displayHistoryChart(true);
+    });
+});
+
+let historyResizeTimer = null;
+window.addEventListener('resize', () => {
+    clearTimeout(historyResizeTimer);
+    historyResizeTimer = setTimeout(() => {
+        initHistoryRangeSlider();
+        displayHistoryChart(false);
+    }, 100);
 });

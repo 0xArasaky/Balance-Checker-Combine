@@ -189,6 +189,13 @@ class JSONHandler:
                         "staked_apt": round(balance.get('staked_apt_balance', 0), 2),
                         "total": round(balance.get('total_balance', 0), 2)
                     }
+                elif sheet_name == "TRX":
+                    item['balances'] = {
+                        "trx": round(balance.get('trx_balance', 0), 2),
+                        "usdt": round(balance.get('usdt_balance', 0), 2),
+                        "other_tokens": round(balance.get('other_tokens_balance', 0), 2),
+                        "total": round(balance.get('total_balance', 0), 2)
+                    }
                 else:
                     # Для бирж и неизвестных типов
                     item['balances'] = {
@@ -236,6 +243,13 @@ class JSONHandler:
                 "apt": round(balance_sums.get('apt', 0), 2),
                 "other_tokens": round(balance_sums.get('other_tokens', 0), 2),
                 "staked_apt": round(balance_sums.get('staked', 0), 2),
+                "total": round(balance_sums.get('total', 0), 2)
+            }
+        elif sheet_name == "TRX":
+            category_stats = {
+                "trx": round(balance_sums.get('trx', 0), 2),
+                "usdt": round(balance_sums.get('usdt', 0), 2),
+                "other_tokens": round(balance_sums.get('other_tokens', 0), 2),
                 "total": round(balance_sums.get('total', 0), 2)
             }
         else:
@@ -370,6 +384,19 @@ class JSONHandler:
                     apt_data["staked_apt"] += b.get('staked_apt_balance', 0)
 
             categories["APT"] = {k: round(v, 2) for k, v in apt_data.items()}
+
+        # TRX
+        if "TRX" in results_by_sheet:
+            balances = results_by_sheet["TRX"].get('balances', [])
+            trx_data = {"total": 0, "trx": 0, "usdt": 0, "other_tokens": 0}
+            for b in balances:
+                if b.get('error') is None:
+                    trx_data["total"] += b.get('total_balance', 0)
+                    trx_data["trx"] += b.get('trx_balance', 0)
+                    trx_data["usdt"] += b.get('usdt_balance', 0)
+                    trx_data["other_tokens"] += b.get('other_tokens_balance', 0)
+
+            categories["TRX"] = {k: round(v, 2) for k, v in trx_data.items()}
 
         # Биржи
         exchanges = ["OKX", "BINANCE", "BYBIT", "BACKPACK", "KUCOIN", "MEXC", "GATE"]

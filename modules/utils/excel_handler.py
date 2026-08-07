@@ -1394,6 +1394,30 @@ class ExcelHandler:
                 ]
             }
 
+        # TRX
+        if "TRX" in results_by_sheet:
+            balances = results_by_sheet["TRX"].get('balances', [])
+            trx_total = 0
+            trx_amount = 0
+            trx_usdt = 0
+            trx_other = 0
+
+            for b in balances:
+                if b.get('error') is None:
+                    trx_total += b.get('total_balance', 0)
+                    trx_amount += b.get('trx_balance', 0)
+                    trx_usdt += b.get('usdt_balance', 0)
+                    trx_other += b.get('other_tokens_balance', 0)
+
+            categories_data['TRX'] = {
+                'total': trx_total,
+                'subcategories': [
+                    ('  TRX', trx_amount),
+                    ('  USDT', trx_usdt),
+                    ('  Other Tokens', trx_other)
+                ]
+            }
+
         # Exchanges (биржи)
         exchanges = ["OKX", "BINANCE", "BYBIT", "BACKPACK", "KUCOIN", "MEXC", "GATE"]
         for exchange in exchanges:
@@ -1619,6 +1643,30 @@ class ExcelHandler:
             base_data['Inscriptions, $'] = inscriptions_values
             base_data['Total Balance, $'] = total_values
 
+        elif sheet_name == "TRX":
+            # Для TRX: TRX, USDT, Other Tokens, Total Balance
+            trx_values = []
+            usdt_values = []
+            other_values = []
+            total_values = []
+
+            for b in balances:
+                if b.get('error') is None:
+                    trx_values.append(self._round_balance(b.get('trx_balance', 0)))
+                    usdt_values.append(self._round_balance(b.get('usdt_balance', 0)))
+                    other_values.append(self._round_balance(b.get('other_tokens_balance', 0)))
+                    total_values.append(self._round_balance(b.get('total_balance', 0)))
+                else:
+                    trx_values.append(b['error'])
+                    usdt_values.append(b['error'])
+                    other_values.append(b['error'])
+                    total_values.append(b['error'])
+
+            base_data['TRX, $'] = trx_values
+            base_data['USDT, $'] = usdt_values
+            base_data['Other Tokens, $'] = other_values
+            base_data['Total Balance, $'] = total_values
+
         elif sheet_name in ["OKX", "BINANCE", "BYBIT", "BACKPACK", "KUCOIN", "MEXC", "GATE"]:
             # Для бирж: только общий баланс
             total_values = []
@@ -1749,6 +1797,11 @@ class ExcelHandler:
                 row['Runes, $'] = self._round_balance(balance.get('runes_balance', 0))
                 row['Inscriptions, $'] = self._round_balance(balance.get('inscriptions_balance', 0))
                 row['Total Balance, $'] = self._round_balance(balance.get('total_balance', 0))
+            elif sheet_name == "TRX":
+                row['TRX, $'] = self._round_balance(balance.get('trx_balance', 0))
+                row['USDT, $'] = self._round_balance(balance.get('usdt_balance', 0))
+                row['Other Tokens, $'] = self._round_balance(balance.get('other_tokens_balance', 0))
+                row['Total Balance, $'] = self._round_balance(balance.get('total_balance', 0))
             elif sheet_name in ["OKX", "BINANCE", "BYBIT", "BACKPACK", "KUCOIN", "MEXC", "GATE"]:
                 row['Total Balance, $'] = self._round_balance(balance.get('total_balance', 0))
             else:
@@ -1772,6 +1825,11 @@ class ExcelHandler:
                 row['BTC Amount, $'] = error
                 row['Runes, $'] = error
                 row['Inscriptions, $'] = error
+                row['Total Balance, $'] = error
+            elif sheet_name == "TRX":
+                row['TRX, $'] = error
+                row['USDT, $'] = error
+                row['Other Tokens, $'] = error
                 row['Total Balance, $'] = error
             elif sheet_name in ["OKX", "BINANCE", "BYBIT", "BACKPACK", "KUCOIN", "MEXC", "GATE"]:
                 row['Total Balance, $'] = error
@@ -1838,6 +1896,11 @@ class ExcelHandler:
             row['BTC Amount, $'] = ''
             row['Runes, $'] = ''
             row['Inscriptions, $'] = ''
+            row['Total Balance, $'] = ''
+        elif sheet_name == "TRX":
+            row['TRX, $'] = ''
+            row['USDT, $'] = ''
+            row['Other Tokens, $'] = ''
             row['Total Balance, $'] = ''
         elif sheet_name in ["OKX", "BINANCE", "BYBIT", "BACKPACK", "KUCOIN", "MEXC", "GATE"]:
             row['Total Balance, $'] = ''
@@ -1936,7 +1999,10 @@ class ExcelHandler:
                 'DeFi, $',                   # SOL
                 'BTC Amount, $',             # BTC
                 'Runes, $',                  # BTC
-                'Inscriptions, $'            # BTC
+                'Inscriptions, $',           # BTC
+                'TRX, $',                    # TRX
+                'USDT, $',                   # TRX
+                'Other Tokens, $'            # TRX
                 # APT теперь использует динамические колонки токенов
             ]
 
@@ -2054,6 +2120,12 @@ class ExcelHandler:
                 max_data_length = max((len(str(self._round_balance(b.get('runes_balance', 0)))) for b in balances if b.get('error') is None), default=0)
             elif col_name == 'Inscriptions, $':
                 max_data_length = max((len(str(self._round_balance(b.get('inscriptions_balance', 0)))) for b in balances if b.get('error') is None), default=0)
+            elif col_name == 'TRX, $':
+                max_data_length = max((len(str(self._round_balance(b.get('trx_balance', 0)))) for b in balances if b.get('error') is None), default=0)
+            elif col_name == 'USDT, $':
+                max_data_length = max((len(str(self._round_balance(b.get('usdt_balance', 0)))) for b in balances if b.get('error') is None), default=0)
+            elif col_name == 'Other Tokens, $':
+                max_data_length = max((len(str(self._round_balance(b.get('other_tokens_balance', 0)))) for b in balances if b.get('error') is None), default=0)
             elif col_name == 'Total Balance, $' or col_name == 'Balance, $':
                 max_data_length = max((len(str(self._round_balance(b.get('total_balance', 0)))) for b in balances if b.get('error') is None), default=0)
 

@@ -29,11 +29,11 @@ EVM_RABBY_STEP_DELAY = 0.2
 EXCHANGE_REQUEST_DELAY = REQUEST_DELAY
 
 # Sheets to process
-# Possible values: "EVM", "SOL", "BTC", "APT", "OKX", "BINANCE", "BYBIT", "BACKPACK", "KUCOIN", "MEXC", "GATE"
-ENABLED_SHEETS = ["EVM", "SOL", "BTC", "APT", "OKX", "BINANCE", "BYBIT", "BACKPACK", "KUCOIN", "MEXC", "GATE"]
+# Possible values: "EVM", "SOL", "BTC", "APT", "TRX", "OKX", "BINANCE", "BYBIT", "BACKPACK", "KUCOIN", "MEXC", "GATE"
+ENABLED_SHEETS = ["EVM", "SOL", "BTC", "APT", "TRX", "OKX", "BINANCE", "BYBIT", "BACKPACK", "KUCOIN", "MEXC", "GATE"]
 
 # Minimum token value in USD to track separately in statistics
-# Applies to EVM, SOL and APT wallets
+# Applies to EVM, SOL, APT and TRX wallets
 # Tokens below this value will be summed into the "Other" category
 MIN_TOKEN_VALUE_TO_TRACK = 1
 

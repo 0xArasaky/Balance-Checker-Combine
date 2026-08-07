@@ -23,6 +23,7 @@ from modules.checkers.evm_checker import get_evm_balance
 from modules.checkers.sol_checker import get_sol_balance
 from modules.checkers.btc_checker import get_btc_balance
 from modules.checkers.apt_checker import get_apt_balance
+from modules.checkers.trx_checker import get_trx_balance
 from modules.checkers.okx_checker import get_okx_balance
 from modules.checkers.binance_checker import get_binance_balance
 from modules.checkers.bybit_checker import get_bybit_balance
@@ -117,8 +118,8 @@ def _process_single_wallet(
                 time.sleep(5)
                 continue
 
-        # Выполняем запрос (для EVM, SOL и APT собираем токены сразу)
-        if checker_func in [get_evm_balance, get_sol_balance, get_apt_balance]:
+        # Выполняем запрос (для EVM, SOL, APT и TRX собираем токены сразу)
+        if checker_func in [get_evm_balance, get_sol_balance, get_apt_balance, get_trx_balance]:
             balance = checker_func(
                 address=address,
                 proxy_dict=proxy_dict,
@@ -595,6 +596,8 @@ def process_sheet(
         checker_func = get_btc_balance
     elif sheet_name == "APT":
         checker_func = get_apt_balance
+    elif sheet_name == "TRX":
+        checker_func = get_trx_balance
     else:
         error_log(f"Неизвестный тип листа: {sheet_name}")
         return None
@@ -657,6 +660,17 @@ def process_sheet(
             "staked": sum_staked,
             "total": sum_total
         }
+    elif sheet_name == "TRX":
+        sum_trx = sum(b.get('trx_balance', 0) for b in balances if b.get('error') is None)
+        sum_usdt = sum(b.get('usdt_balance', 0) for b in balances if b.get('error') is None)
+        sum_other_tokens = sum(b.get('other_tokens_balance', 0) for b in balances if b.get('error') is None)
+        sum_total = sum(b.get('total_balance', 0) for b in balances if b.get('error') is None)
+        sum_stats = {
+            "trx": sum_trx,
+            "usdt": sum_usdt,
+            "other_tokens": sum_other_tokens,
+            "total": sum_total
+        }
 
     # Выводим статистику по листу
     info_log("")
@@ -698,6 +712,13 @@ def process_sheet(
             if sum_stats['other_tokens'] > 0:
                 info_log(f"  Другие токены: ${sum_stats['other_tokens']:>13,.2f}")
             info_log(f"  APT в стейкинге: ${sum_stats['staked']:>11,.2f}")
+            info_log(f"  {'─' * 40}")
+            success_log(f"  ИТОГО:        ${sum_stats['total']:>15,.2f}")
+        elif sheet_name == "TRX":
+            info_log(f"  TRX:         ${sum_stats['trx']:>15,.2f}")
+            info_log(f"  USDT:        ${sum_stats['usdt']:>15,.2f}")
+            if sum_stats['other_tokens'] > 0:
+                info_log(f"  Другие токены: ${sum_stats['other_tokens']:>13,.2f}")
             info_log(f"  {'─' * 40}")
             success_log(f"  ИТОГО:        ${sum_stats['total']:>15,.2f}")
 
@@ -836,6 +857,26 @@ def main():
                             "tokens": tokens_list
                         }
 
+                # Если обработали TRX лист - извлекаем статистику токенов из балансов
+                if sheet_name == "TRX":
+                    wallets = result['wallets']
+                    balances = result['balances']
+
+                    # Извлекаем токены из балансов (они уже собраны в get_trx_balance)
+                    tokens_list = [balance.get('tokens') for balance in balances]
+
+                    # Добавляем результаты токенов в структуру (только если есть хоть один с токенами)
+                    if any(tokens is not None for tokens in tokens_list):
+                        info_log("")
+                        info_log("=" * 80)
+                        info_log("СТАТИСТИКА ТОКЕНОВ TRX СОБРАНА")
+                        info_log("=" * 80)
+
+                        results_by_sheet["TRX Tokens Stats"] = {
+                            "wallets": wallets,
+                            "tokens": tokens_list
+                        }
+
             else:
                 failed_sheets.append(sheet_name)
         except Exception as e:
@@ -918,6 +959,11 @@ def main():
                     parts.append(f"${sums.get('other_tokens', 0):,.2f} (другие токены)")
                 parts.append(f"${sums.get('staked', 0):,.2f} (APT в стейкинге)")
                 info_log(f"  APT: {' + '.join(parts)} = ${sums.get('total', 0):,.2f}")
+            elif sheet_name == "TRX":
+                parts = [f"${sums.get('trx', 0):,.2f} (TRX)", f"${sums.get('usdt', 0):,.2f} (USDT)"]
+                if sums.get('other_tokens', 0) > 0:
+                    parts.append(f"${sums.get('other_tokens', 0):,.2f} (другие токены)")
+                info_log(f"  TRX: {' + '.join(parts)} = ${sums.get('total', 0):,.2f}")
             elif sheet_name == "OKX":
                 info_log(f"  OKX: ${sums.get('total', 0):,.2f}")
             elif sheet_name == "BINANCE":
@@ -1049,8 +1095,12 @@ def start_web_server():
                 self.end_headers()
                 self.wfile.write(response_data)
 
+    class ThreadingReusableTCPServer(socketserver.ThreadingTCPServer):
+        allow_reuse_address = True
+        daemon_threads = True
+
     try:
-        with socketserver.TCPServer(("", PORT), MyHTTPRequestHandler) as httpd:
+        with ThreadingReusableTCPServer(("", PORT), MyHTTPRequestHandler) as httpd:
             url = f"http://localhost:{PORT}"
 
             print(f"\nОткройте в браузере: {url}\n")
